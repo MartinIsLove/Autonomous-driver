@@ -1,0 +1,8 @@
+# tensorflow-cpu
+pandas
+numpy
+scikit-learn
+joblib
+matplotlib
+seaborn
+pynput
