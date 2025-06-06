@@ -22,4 +22,6 @@ hs_err_pid*
 log_main.txt
 *_log.txt
 
-venv
+venv/*
+__pycache__/*
+torcs/*
