@@ -87,7 +87,7 @@ model.compile(
 
 # Visualizza l'architettura
 model.summary()
-    
+
 #################################################
 #preparazione dati
 
@@ -228,7 +228,7 @@ history = model.fit(
     train_data,
     train_labels,
     epochs=100,
-    batch_size=128,
+    batch_size=64,
     validation_data=(val_data, val_labels),
     callbacks=callbacks,
     verbose=1
