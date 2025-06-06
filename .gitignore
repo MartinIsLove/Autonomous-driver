@@ -21,3 +21,5 @@ hs_err_pid*
 # log files
 log_main.txt
 *_log.txt
+
+venv
