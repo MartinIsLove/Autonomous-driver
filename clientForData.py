@@ -1,9 +1,14 @@
 import socket
 import time
+import math
 import os
-from pynput import keyboard
 import csv
 from datetime import datetime
+import pygame
+import importlib
+from keyboard_controls import get_keyboard_controls
+from joystick_controls import get_joystick_controls
+
 # Configurazione indirizzo server
 SERVER_IP = "localhost"
 SERVER_PORT = 3001
@@ -15,24 +20,34 @@ sock.bind(('', 0))  # Bind a una porta casuale
 client_port = sock.getsockname()[1]
 print(f"In ascolto sulla porta: {client_port}")
 
-# Inizializzazione connessione
+# Inizializzazione connessione con attesa TORCS
 init_msg = f"SCR 1.1\n"
-sock.sendto(init_msg.encode(), (SERVER_IP, SERVER_PORT))
-print("Inviato messaggio di inizializzazione")
+connected = False
+print("Attendo che TORCS sia disponibile...")
+
+while not connected:
+    try:
+        sock.sendto(init_msg.encode(), (SERVER_IP, SERVER_PORT))
+        sock.settimeout(2.0)  # Timeout breve per la risposta
+        data, addr = sock.recvfrom(BUFFER_SIZE)
+        if b'TORCS' in data or data:  # Puoi personalizzare il controllo in base alla risposta attesa
+            connected = True
+            print("Connessione a TORCS stabilita!")
+        else:
+            print("Nessuna risposta da TORCS, ritento...")
+    except socket.timeout:
+        print("Nessuna risposta da TORCS, ritento...")
+    except Exception as e:
+        print(f"Errore durante la connessione: {e}")
+    time.sleep(1)
+
+sock.settimeout(None)  # Torna al comportamento di default
 
 controls = {
     'throttle': 0.0,
     'brake': 0.0,
     'steer': 0.0,
-    'gear': 1  # Neutral = 0, First = 1, etc.
-}
-
-# Tracking delle azioni anziché solo i tasti
-key_actions = {
-    'accelerate': False,
-    'brake': False,
-    'steer_left': False,
-    'steer_right': False
+    'gear': 0
 }
 
 def setup_csv_logging():
@@ -43,7 +58,7 @@ def setup_csv_logging():
         print(f"Creata cartella {data_dir}")
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_filename = os.path.join(data_dir, f"telemetry_{timestamp}.csv")
+    csv_filename = os.path.join(data_dir, f"wippy_telemetry_{timestamp}.csv")
     
     # Open file and write headers
     with open(csv_filename, 'w', newline='') as csvfile:
@@ -121,77 +136,6 @@ def log_telemetry(csv_filename, telemetry):
         row['steer'] = controls['steer']
         
         writer.writerow(row)
-def on_press(key):
-    try:
-        if hasattr(key, 'char'):
-            # Registra l'azione basata sul tasto
-            if key.char == 'w':
-                key_actions['accelerate'] = True
-            elif key.char == 's':
-                key_actions['brake'] = True
-            elif key.char == 'a':
-                key_actions['steer_left'] = True
-            elif key.char == 'd':
-                key_actions['steer_right'] = True
-            elif key.char == 'q':  
-                controls['gear'] = max(-1, controls['gear'] - 1)
-            elif key.char == 'e':  
-                controls['gear'] = min(6, controls['gear'] + 1)
-            elif key.char == 'r':  
-                # Reset
-                controls['throttle'] = 0.0
-                controls['brake'] = 0.0
-                controls['steer'] = 0.0
-                key_actions['accelerate'] = False
-                key_actions['brake'] = False
-                key_actions['steer_left'] = False
-                key_actions['steer_right'] = False
-            
-            # Applica le azioni ai controlli
-            update_controls()
-    except AttributeError:
-        pass
-
-def on_release(key):
-    try:
-        if hasattr(key, 'char'):
-            # Disattiva l'azione quando il tasto viene rilasciato
-            if key.char == 'w':
-                key_actions['accelerate'] = False
-            elif key.char == 's':
-                key_actions['brake'] = False
-            elif key.char == 'a':
-                key_actions['steer_left'] = False
-            elif key.char == 'd':
-                key_actions['steer_right'] = False
-            
-            # Aggiorna i controlli in base alle azioni attive
-            update_controls()
-    except AttributeError:
-        pass
-    
-    if key == keyboard.Key.esc:
-        return False
-
-def update_controls():
-    # Throttle e brake
-    if key_actions['accelerate'] and not key_actions['brake']:
-        controls['throttle'] += 0.2
-        controls['brake'] = 0.0
-    elif key_actions['brake'] and not key_actions['accelerate']:
-        controls['throttle'] = 0.0
-        controls['brake'] += 0.1
-    elif not key_actions['accelerate'] and not key_actions['brake']:
-        controls['throttle'] = 0.0
-        controls['brake'] = 0.0
-    
-    # Sterzo
-    if key_actions['steer_left'] and not key_actions['steer_right']:
-        controls['steer'] += 0.2
-    elif key_actions['steer_right'] and not key_actions['steer_left']:
-        controls['steer'] -= 0.2
-    elif not key_actions['steer_left'] and not key_actions['steer_right']:
-        controls['steer'] = 0.0
 
 def parse_telemetry(data):
     """Analizza i dati telemetrici TORCS/SCR nel formato (key value)"""
@@ -235,23 +179,13 @@ def parse_telemetry(data):
         print(f"Errore parsing: {e}")
         return None
 
-# def drive_controller(telemetry):
-#     """Controller di guida base (esempio)"""
-#     steer = -telemetry['trackPos'] * 0.5  # Regolazione sterzo
-#     throttle = 0.3 if abs(telemetry['trackPos']) < 0.8 else 0.1
-#     brake = 0.0
-#     gear = 3  # Cambio fisso
-    
-#     # Formato comandi per SCR
-#     return f"(accel {throttle})(brake {brake})(gear {gear})(steer {steer})"
 def drive_controller(telemetry):
     """Controller con input da tastiera"""
     # Format commands for SCR
     return f"(accel {controls['throttle']:.2f})(brake {controls['brake']:.2f})(gear {controls['gear']})(steer {controls['steer']:.2f})"
 
-listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-listener.start()
 csv_filename = setup_csv_logging()
+
 print(f"Logging telemetry to {csv_filename}")
 print("Controlli tastiera:")
 print("W - Accelera")
@@ -263,27 +197,70 @@ print("E - Aumenta marcia")
 print("R - Resetta controlli")
 print("ESC - Esci")
 
-try:
-    while True:
+# Inizializzazione joystick
+pygame.init()
+pygame.joystick.init()
+
+joystick = pygame.joystick.Joystick(0)
+joystick.init()
+
+print(f"Joystick: {joystick.get_name()}")
+
+prev_gear_up = False
+prev_gear_down = False
+
+while True:
+    try:
         # Ricezione dati telemetrici
         data, addr = sock.recvfrom(BUFFER_SIZE)
-        
+        if not data:
+            print("\nFine partita: nessun dato ricevuto.")
+            break
+
         telemetry = parse_telemetry(data.decode())
-        print(telemetry)
         if not telemetry:
-            continue
+            print("\nFine partita o dati non validi.")
+            break
+
         log_telemetry(csv_filename, telemetry)
-        
+
+        # --- SCEGLI QUALE MODALITÀ USARE: tastiera o joystick ---
+        try:
+            controls, prev_gear_up, prev_gear_down = get_joystick_controls(controls, joystick, prev_gear_up, prev_gear_down)
+        except Exception as e:
+            print(f"\n[ERRORE JOYSTICK] {e}. Provo a mantenere i controlli precedenti.")
+            # In caso di errore, non aggiornare i controlli e continua
+            pass
+        # Se vuoi usare la tastiera, decommenta la riga sotto e commenta quella sopra:
+        # controls = get_keyboard_controls(controls)
+
         # Calcolo azioni di guida
         command = drive_controller(telemetry)
-        
         sock.sendto(command.encode(), (SERVER_IP, SERVER_PORT))
-        
-        # Debug
-        # print(f"Pos: {telemetry['trackPos']:.2f} | Comando: {command}")
 
-except KeyboardInterrupt:
-    print("\nClient terminato")
-finally:
-    listener.stop()
-    sock.close()
+        # Visualizzazione barra freno (orizzontale) e sterzo (verticale)
+        brake_bar_len = 20
+        brake_pos = int(controls['brake'] * brake_bar_len)
+        brake_bar = "[" + "#" * brake_pos + "-" * (brake_bar_len - brake_pos) + "]"
+
+        steer_bar_len = 21
+        steer_center = steer_bar_len // 2
+        steer_pos = int(controls['steer'] * (steer_center))
+        steer_bar = [" "] * steer_bar_len
+        steer_bar[steer_center + steer_pos] = "|"
+        steer_bar_str = "".join(steer_bar)
+
+        print(f"\rFreno {brake_bar}  Sterzo {steer_bar_str}", end="")
+
+    except Exception as e:
+        print(f"\nErrore durante la ricezione dati: {e}")
+        import traceback
+        traceback.print_exc()
+        break
+    
+    finally:
+        # RIMUOVI: sock.close() e break da qui
+        pass
+
+sock.close()
+print("Logging interrotto e socket chiuso.")
