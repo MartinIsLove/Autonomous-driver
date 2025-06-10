@@ -6,3 +6,5 @@ joblib
 matplotlib
 seaborn
 pynput
+pygame
+matplotlib
