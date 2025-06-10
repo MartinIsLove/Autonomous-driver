@@ -71,8 +71,12 @@ def load_and_prepare_data(data_dir, destination_dir=""):
     targetsData['throttle'] = targetsData['throttle'].clip(0.0, 1.0)
     targetsData['brake'] = targetsData['brake'].clip(0.0, 1.0)
     
-    gear_mapping = {-1: 0, 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7}
-    targetsData.loc[:, 'gear'] = targetsData['gear'].map(gear_mapping)
+    # Rimuovi completamente il gear mapping - lascia i valori originali
+    # gear_mapping = {-1: 0, 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7}
+    # targetsData.loc[:, 'gear'] = targetsData['gear'].map(gear_mapping)
+
+    # Invece, assicurati solo che le marce siano nel range corretto
+    targetsData['gear'] = targetsData['gear'].clip(-1, 6).astype(int)
 
     if targetsData['gear'].isnull().any():
         num_nan_gears = targetsData['gear'].isnull().sum()

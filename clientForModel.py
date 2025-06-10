@@ -167,8 +167,11 @@ except Exception as e:
 SEQUENCE_LENGTH = 10
 sequence_buffer = []
 
-# Map gear classes to actual gear values
-gear_mapping = {0: -1, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6}
+# Rimuovi il gear mapping - usa direttamente il valore predetto
+# gear_mapping = {0: -1, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6}
+# gear_pred = gear_mapping[int(prediction[0][3])]
+
+# Il calcolo di gear_pred viene ora fatto dopo la predizione del modello nel ciclo principale.
 
 # Feature order must match what the model was trained with
 # Questo deve corrispondere alle 29 feature usate in training/data.py
@@ -248,7 +251,8 @@ try:
         steer_pred = prediction[0][0]
         throttle_pred = prediction[0][1] 
         brake_pred = prediction[0][2]
-        gear_pred = int(prediction[0][3])  # Gear come valore diretto
+        gear_pred = int(round(prediction[0][3]))  # Usa direttamente il valore predetto
+        gear_pred = max(-1, min(6, gear_pred))    # Assicurati che sia nel range corretto
         
         actions = {
             'steer': float(steer_pred),

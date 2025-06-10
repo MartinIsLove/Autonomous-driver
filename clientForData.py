@@ -6,8 +6,8 @@ import csv
 from datetime import datetime
 import pygame
 import importlib
-from keyboard_controls import get_keyboard_controls
-from joystick_controls import get_joystick_controls
+from coltrols.keyboard_controls import get_keyboard_controls
+from coltrols.joystick_controls import get_joystick_controls
 
 # Configurazione indirizzo server
 SERVER_IP = "localhost"
@@ -201,7 +201,7 @@ print("ESC - Esci")
 pygame.init()
 pygame.joystick.init()
 
-joystick = pygame.joystick.Joystick(0)
+joystick = pygame.joystick.Joystick(1)
 joystick.init()
 
 print(f"Joystick: {joystick.get_name()}")
@@ -229,7 +229,6 @@ while True:
             controls, prev_gear_up, prev_gear_down = get_joystick_controls(controls, joystick, prev_gear_up, prev_gear_down)
         except Exception as e:
             print(f"\n[ERRORE JOYSTICK] {e}. Provo a mantenere i controlli precedenti.")
-            # In caso di errore, non aggiornare i controlli e continua
             pass
         # Se vuoi usare la tastiera, decommenta la riga sotto e commenta quella sopra:
         # controls = get_keyboard_controls(controls)
