@@ -175,10 +175,10 @@ def on_release(key):
 
 def update_controls():
     # Throttle e brake
-    if key_actions['accelerate'] and not key_actions['brake']:
+    if key_actions['accelerate'] and not key_actions['brake'] and controls['throttle'] <= 0.8:
         controls['throttle'] += 0.2
         controls['brake'] = 0.0
-    elif key_actions['brake'] and not key_actions['accelerate']:
+    elif key_actions['brake'] and not key_actions['accelerate'] and controls['brake'] <= 0.9:
         controls['throttle'] = 0.0
         controls['brake'] += 0.1
     elif not key_actions['accelerate'] and not key_actions['brake']:
@@ -186,9 +186,9 @@ def update_controls():
         controls['brake'] = 0.0
     
     # Sterzo
-    if key_actions['steer_left'] and not key_actions['steer_right']:
+    if key_actions['steer_left'] and not key_actions['steer_right'] and controls['steer'] <= 0.8:
         controls['steer'] += 0.2
-    elif key_actions['steer_right'] and not key_actions['steer_left']:
+    elif key_actions['steer_right'] and not key_actions['steer_left'] and controls['steer'] >= -0.8:
         controls['steer'] -= 0.2
     elif not key_actions['steer_left'] and not key_actions['steer_right']:
         controls['steer'] = 0.0
@@ -269,9 +269,13 @@ try:
         data, addr = sock.recvfrom(BUFFER_SIZE)
         
         telemetry = parse_telemetry(data.decode())
-        print(telemetry)
+        
         if not telemetry:
             continue
+
+        # Stampa i controlli correnti prima di salvare
+        print(f"throttle: {controls['throttle']:.2f}, brake: {controls['brake']:.2f}, steer: {controls['steer']:.2f}, gear: {controls['gear']}")
+
         log_telemetry(csv_filename, telemetry)
         
         # Calcolo azioni di guida
