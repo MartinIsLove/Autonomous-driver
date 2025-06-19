@@ -13,7 +13,7 @@ class SteeringWheelControl(BaseControl):
         if pygame.joystick.get_count() == 0:
             raise IOError("Nessun volante/joystick trovato.")
             
-        self.joystick = pygame.joystick.Joystick(0)
+        self.joystick = pygame.joystick.Joystick(1)
         self.joystick.init()
         
         print(f"Volante inizializzato: {self.joystick.get_name()}")
@@ -33,10 +33,16 @@ class SteeringWheelControl(BaseControl):
         self.controls['steer'] = max(-1.0, min(1.0, raw_steer * 1.5))
         
         # Acceleratore
-        self.controls['throttle'] = (1 - self.joystick.get_axis(1)) / 2
+        throttle_axis = self.joystick.get_axis(1)
+        if throttle_axis > 0.95:  # Deadzone
+            throttle_axis = 1.0
+        self.controls['throttle'] = (1 - throttle_axis) / 2
         
         # Freno (con curva logaritmica)
-        raw_brake = (1 - self.joystick.get_axis(2)) / 2
+        brake_axis = self.joystick.get_axis(2)
+        if brake_axis > 0.95:  # Deadzone 
+            brake_axis = 1.0
+        raw_brake = (1 - brake_axis) / 2
         self.controls['brake'] = 1 - np.log(1 + 180 * (1 - raw_brake)) / np.log(1 + 180)
 
         # Cambio

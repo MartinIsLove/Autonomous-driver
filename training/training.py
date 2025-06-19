@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import pickle
+from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.neural_network import MLPRegressor
@@ -63,9 +64,9 @@ class TorcsAutonomousDriver:
             try:
                 df = pd.read_csv(os.path.join(data_dir, file))
                 list_dataframes.append(df)
-                print(f"✓ {file}")
+                print(f"{file}")
             except Exception as e:
-                print(f"✗ Errore {file}: {e}")
+                print(f"Errore {file}: {e}")
         
         if not list_dataframes:
             raise ValueError("Nessun dato valido caricato")
@@ -151,7 +152,7 @@ class TorcsAutonomousDriver:
                 metric_name = "R²"
             
             self.models[target_name] = model
-            print(f"   ✓ {model_type.upper()} - {metric_name}: {score:.4f}")
+            print(f"   {model_type.upper()} - {metric_name}: {score:.4f}")
         
         self.is_trained = True
         print(f"\nModello di guida autonoma pronto!")
@@ -239,8 +240,14 @@ if __name__ == "__main__":
     data_dir = './torcs_training_data'
     driver.train(data_dir)
     
-    # Salva il modello
-    driver.save_model('torcs_optimal_model.pkl')
+    # Salva il modello in una cartella con timestamp
+    now = datetime.now()
+    timestamp = now.strftime("%d-%m-%Y_%H-%M-%S")
+    model_dir = f'models/model_{timestamp}'
+    os.makedirs(model_dir, exist_ok=True)
+    
+    model_path = os.path.join(model_dir, 'torcs_optimal_model.pkl')
+    driver.save_model(model_path)
     
     # Test con dati di esempio
     print("\n" + "="*50)
