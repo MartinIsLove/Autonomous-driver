@@ -3,13 +3,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from datetime import datetime
 
 # Configurazione stile plot
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
 
-data_dir = "C:/Users/Wippy00/Desktop/@TEST/@Python/Autonomous-Driver/torcs_training_data"
+data_dir = "./torcs_training_data"
 
 all_files = [file for file in os.listdir(data_dir) if file.endswith('.csv')]
 list_dataframes = []
