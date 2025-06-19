@@ -287,6 +287,30 @@ class Car:
         
         return self.validate_and_clip_controls()
     
+    def get_state_dict(self):
+        """Restituisce lo stato corrente dell'auto come dizionario."""
+        return {
+            'angle': self.angle,
+            'trackPos': self.trackPos,
+            'z': self.z,
+            'speedX': self.speedX,
+            'speedY': self.speedY,
+            'speedZ': self.speedZ,
+            'rpm': self.rpm,
+            'gear': self.gear,
+            'track': self.track,
+            'opponents': self.opponents,
+            'focus': self.focus,
+            'wheelSpinVel': self.wheelSpinVel,
+            'fuel': self.fuel,
+            'damage': self.damage,
+            'distRaced': self.distRaced,
+            'distFromStart': self.distFromStart,
+            'curLapTime': self.curLapTime,
+            'lastLapTime': self.lastLapTime,
+            'racePos': self.racePos
+        }
+    
     def set_control(self, control):
         """Imposta la strategia di controllo."""
         self.control = control
