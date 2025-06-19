@@ -126,8 +126,6 @@ def main():
         return
 
     model_path = select_model()
-    if not model_path:
-        return
 
     try:
         steering_wheel_control = SteeringWheelControl()
@@ -136,7 +134,8 @@ def main():
     except IOError as e:
         print(f"Attenzione: {e}. Il controllo da volante non sarà disponibile.")
 
-    CONTROLLERS["ai"] = AIControl(model_path=model_path)
+    if model_path:
+        CONTROLLERS["ai"] = AIControl(model_path=model_path)
     CONTROLLERS["keyboard"] = KeyboardControl()
     
     current_control_mode = "keyboard"
