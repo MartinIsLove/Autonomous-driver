@@ -3,13 +3,16 @@ from typing import Dict, Any
 import pickle
 import numpy as np
 import warnings
+import threading
+import queue
+import time
 
 # Silenzia i warning di sklearn
 warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
 
 class AIControl(BaseControl):
     '''
-    Driver per TORCS che utilizza il modello di machine learning
+    Driver per TORCS che utilizza il modello di machine learning in un thread separato
     '''
 
     def __init__(self, model_path='torcs_optimal_model.pkl'):
@@ -20,8 +23,18 @@ class AIControl(BaseControl):
         self.feature_sets = {}
         self.optimal_models = {}
         
+        # Threading components
+        self.input_queue = queue.Queue(maxsize=1)
+        self.output_queue = queue.Queue(maxsize=1)
+        self.stop_event = threading.Event()
+        self.ai_thread = None
+        self.last_controls = {"steer": 0.0, "throttle": 0.3, "brake": 0.0, "gear": 1}
+        
         # Carica il modello
         self.load_model()
+        
+        # Avvia il thread AI
+        self.start_ai_thread()
 
     def load_model(self):
         """Carica il modello di ML ottimale"""
@@ -42,6 +55,54 @@ class AIControl(BaseControl):
         except Exception as e:
             print(f"Errore caricamento modello: {e}")
             raise
+
+    def start_ai_thread(self):
+        """Avvia il thread per l'elaborazione AI"""
+        self.ai_thread = threading.Thread(target=self._ai_worker, daemon=True)
+        self.ai_thread.start()
+        print("Thread AI avviato")
+
+    def stop_ai_thread(self):
+        """Ferma il thread AI"""
+        self.stop_event.set()
+        if self.ai_thread and self.ai_thread.is_alive():
+            self.ai_thread.join(timeout=1.0)
+        print("Thread AI fermato")
+
+    def _ai_worker(self):
+        """Worker thread che elabora le predizioni AI"""
+        while not self.stop_event.is_set():
+            try:
+                # Prendi i dati più recenti dalla queue (non bloccante)
+                car_state_obj = None
+                try:
+                    car_state_obj = self.input_queue.get_nowait()
+                except queue.Empty:
+                    time.sleep(0.001)  # Breve pausa per non sovraccaricare la CPU
+                    continue
+                
+                if car_state_obj is None:
+                    continue
+                
+                # Elabora i controlli
+                sensor_data = self.get_sensor_dict(car_state_obj)
+                predictions = self.predict_controls(sensor_data)
+                final_controls = predictions  # o self.safety_adjustments(predictions.copy(), car_state_obj)
+                
+                # Metti il risultato nella queue di output (sostituisce se piena)
+                try:
+                    self.output_queue.put_nowait(final_controls)
+                except queue.Full:
+                    # Rimuovi il vecchio risultato e metti quello nuovo
+                    try:
+                        self.output_queue.get_nowait()
+                        self.output_queue.put_nowait(final_controls)
+                    except queue.Empty:
+                        pass
+                
+            except Exception as e:
+                print(f"Errore nel thread AI: {e}")
+                time.sleep(0.1)
 
     def get_sensor_dict(self, car_state_obj):
         """Estrae i dati dei sensori dall'oggetto Car e li mette in un dizionario."""
@@ -102,9 +163,9 @@ class AIControl(BaseControl):
                 print(f"Errore predizione {target_name}: {e}")
                 fallback_values = {
                     'steer': 0.0,
-                    'throttle': 0.3,
+                    'throttle': 0.0,
                     'brake': 0.0,
-                    'gear': 3
+                    'gear': 0
                 }
                 predictions[target_name] = fallback_values[target_name]
         
@@ -143,24 +204,38 @@ class AIControl(BaseControl):
     def get_actions(self, *args, **kwargs) -> Dict[str, Any]:
         """
         Implementa la logica dell'AI per decidere le azioni
-        in base allo stato del gioco/simulazione.
+        in base allo stato del gioco/simulazione (thread-safe).
         """
         car_state_obj = kwargs.get('game_state')
         if not car_state_obj:
-            return {"steer": 0.0, "throttle": 0.3, "brake": 0.0, "gear": 1}
+            return self.last_controls.copy()
 
-        sensor_data = self.get_sensor_dict(car_state_obj)
+        # Invia i dati al thread AI (non bloccante)
+        try:
+            self.input_queue.put_nowait(car_state_obj)
+        except queue.Full:
+            # Sostituisci i dati vecchi con quelli nuovi
+            try:
+                self.input_queue.get_nowait()
+                self.input_queue.put_nowait(car_state_obj)
+            except queue.Empty:
+                pass
         
-        # Predici controlli
-        predictions = self.predict_controls(sensor_data)
+        # Prendi il risultato più recente se disponibile
+        try:
+            new_controls = self.output_queue.get_nowait()
+            self.last_controls = {
+                "steer": float(new_controls['steer']),
+                "throttle": float(new_controls['throttle']),
+                "brake": float(new_controls['brake']),
+                "gear": int(new_controls['gear'])
+            }
+        except queue.Empty:
+            # Usa i controlli precedenti se non ci sono nuovi risultati
+            pass
         
-        # Aggiustamenti di sicurezza
-        # final_controls = self.safety_adjustments(predictions.copy(), car_state_obj)
-        final_controls = predictions
-        
-        return {
-            "steer": float(final_controls['steer']),
-            "throttle": float(final_controls['throttle']),
-            "brake": float(final_controls['brake']),
-            "gear": int(final_controls['gear'])
-        }
+        return self.last_controls.copy()
+
+    def __del__(self):
+        """Cleanup quando l'oggetto viene distrutto"""
+        self.stop_ai_thread()
