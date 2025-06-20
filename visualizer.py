@@ -544,3 +544,263 @@ if track_columns:
     print(f"- Sensore destro medio: {right_sensors.mean():.2f}m")
     if 'steer' in full_dataframes.columns:
         print(f"- Correlazione sensori-sterzo: {correlation:.3f}")
+
+# 12. ANALISI GIRI COMPLETATI
+print("\n12. ANALISI GIRI COMPLETATI:")
+print("-" * 40)
+
+if 'lastLapTime' in full_dataframes.columns:
+    # Rileva i cambi di giro quando lastLapTime cambia
+    full_dataframes['lap_changed'] = full_dataframes['lastLapTime'] != full_dataframes['lastLapTime'].shift(1)
+    full_dataframes['lap_number'] = full_dataframes['lap_changed'].cumsum()
+    
+    # Trova i punti di completamento giro (dove lastLapTime cambia)
+    lap_completions = full_dataframes[full_dataframes['lap_changed'] & (full_dataframes.index > 0)]
+    
+    if len(lap_completions) > 0:
+        print(f"🏁 {len(lap_completions)} giri completati rilevati")
+        
+        # Estrai i tempi dei giri
+        lap_times = lap_completions['lastLapTime'].values
+        lap_numbers = range(1, len(lap_times) + 1)
+        
+        # Calcola statistiche giri
+        if len(lap_times) > 0:
+            best_lap = min(lap_times)
+            worst_lap = max(lap_times)
+            avg_lap = np.mean(lap_times)
+            
+            print(f"- Miglior giro: {best_lap:.3f}s")
+            print(f"- Peggior giro: {worst_lap:.3f}s") 
+            print(f"- Tempo medio: {avg_lap:.3f}s")
+            print(f"- Deviazione standard: {np.std(lap_times):.3f}s")
+        
+        # Visualizzazioni giri
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        fig.suptitle('ANALISI GIRI COMPLETATI', fontsize=16, fontweight='bold')
+        
+        # 1. Tempi giri nel tempo
+        axes[0,0].plot(lap_numbers, lap_times, 'o-', color='blue', linewidth=2, markersize=6)
+        axes[0,0].axhline(y=best_lap, color='green', linestyle='--', label=f'Miglior: {best_lap:.3f}s')
+        axes[0,0].axhline(y=avg_lap, color='orange', linestyle='--', label=f'Media: {avg_lap:.3f}s')
+        axes[0,0].set_title('Tempi Giri nel Tempo')
+        axes[0,0].set_xlabel('Numero Giro')
+        axes[0,0].set_ylabel('Tempo Giro (s)')
+        axes[0,0].legend()
+        axes[0,0].grid(True, alpha=0.3)
+        
+        # 2. Distribuzione tempi giri
+        axes[0,1].hist(lap_times, bins=min(10, len(lap_times)), alpha=0.7, color='green', edgecolor='black')
+        axes[0,1].axvline(best_lap, color='red', linestyle='--', label=f'Miglior: {best_lap:.3f}s')
+        axes[0,1].axvline(avg_lap, color='blue', linestyle='--', label=f'Media: {avg_lap:.3f}s')
+        axes[0,1].set_title('Distribuzione Tempi Giri')
+        axes[0,1].set_xlabel('Tempo Giro (s)')
+        axes[0,1].set_ylabel('Frequenza')
+        axes[0,1].legend()
+        
+        # 3. Miglioramento nel tempo (trend)
+        if len(lap_times) > 2:
+            # Calcola trend lineare
+            z = np.polyfit(lap_numbers, lap_times, 1)
+            p = np.poly1d(z)
+            axes[0,2].plot(lap_numbers, lap_times, 'o', color='blue', alpha=0.7, label='Tempi Giri')
+            axes[0,2].plot(lap_numbers, p(lap_numbers), 'r--', linewidth=2, label=f'Trend: {z[0]:.4f}s/giro')
+            axes[0,2].set_title('Trend Miglioramento')
+            axes[0,2].set_xlabel('Numero Giro')
+            axes[0,2].set_ylabel('Tempo Giro (s)')
+            axes[0,2].legend()
+            axes[0,2].grid(True, alpha=0.3)
+            
+            trend_text = "📈 Peggioramento" if z[0] > 0 else "📉 Miglioramento" if z[0] < 0 else "➡️ Stabile"
+            axes[0,2].text(0.05, 0.95, trend_text, transform=axes[0,2].transAxes,
+                          bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7))
+        
+        # 4. Analisi per giro - Velocità media
+        lap_stats = []
+        for lap_num in range(1, len(lap_completions) + 1):
+            lap_data = full_dataframes[full_dataframes['lap_number'] == lap_num]
+            if len(lap_data) > 0:
+                lap_stats.append({
+                    'lap': lap_num,
+                    'lap_time': lap_times[lap_num-1] if lap_num-1 < len(lap_times) else 0,
+                    'avg_speed': lap_data['speedX'].mean(),
+                    'max_speed': lap_data['speedX'].max(),
+                    'avg_throttle': lap_data['throttle'].mean(),
+                    'avg_brake': lap_data['brake'].mean(),
+                    'off_track_pct': (abs(lap_data['trackPos']) > 1.0).mean() * 100,
+                    'damage': lap_data['damage'].max()
+                })
+        
+        if lap_stats:
+            lap_df = pd.DataFrame(lap_stats)
+            
+            # Velocità media per giro
+            axes[1,0].bar(lap_df['lap'], lap_df['avg_speed'], alpha=0.7, color='purple')
+            axes[1,0].set_title('Velocità Media per Giro')
+            axes[1,0].set_xlabel('Numero Giro')
+            axes[1,0].set_ylabel('Velocità Media')
+            
+            # Correlazione tempo giro vs velocità
+            if len(lap_df) > 1:
+                correlation_speed = np.corrcoef(lap_df['lap_time'], lap_df['avg_speed'])[0,1]
+                axes[1,1].scatter(lap_df['avg_speed'], lap_df['lap_time'], 
+                                 c=lap_df['lap'], cmap='viridis', s=100, alpha=0.7)
+                axes[1,1].set_xlabel('Velocità Media')
+                axes[1,1].set_ylabel('Tempo Giro (s)')
+                axes[1,1].set_title(f'Velocità vs Tempo\n(Corr: {correlation_speed:.3f})')
+                
+                # Aggiungi colorbar per numero giro
+                cbar = plt.colorbar(axes[1,1].collections[0], ax=axes[1,1])
+                cbar.set_label('Numero Giro')
+            
+            # Percentuale fuori pista per giro
+            colors_track = ['red' if x > 10 else 'orange' if x > 5 else 'green' for x in lap_df['off_track_pct']]
+            axes[1,2].bar(lap_df['lap'], lap_df['off_track_pct'], alpha=0.7, color=colors_track)
+            axes[1,2].set_title('% Fuori Pista per Giro')
+            axes[1,2].set_xlabel('Numero Giro')
+            axes[1,2].set_ylabel('% Fuori Pista')
+            axes[1,2].axhline(y=10, color='red', linestyle='--', alpha=0.7, label='Soglia Critica')
+            axes[1,2].legend()
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # 13. DETTAGLI GIRI SPECIFICI
+        print("\n13. DETTAGLI GIRI SPECIFICI:")
+        print("-" * 40)
+        
+        if len(lap_df) > 0:
+            # Miglior e peggior giro
+            best_lap_idx = lap_df['lap_time'].idxmin()
+            worst_lap_idx = lap_df['lap_time'].idxmax()
+            
+            print(f"🥇 MIGLIOR GIRO #{lap_df.loc[best_lap_idx, 'lap']}:")
+            print(f"   - Tempo: {lap_df.loc[best_lap_idx, 'lap_time']:.3f}s")
+            print(f"   - Velocità media: {lap_df.loc[best_lap_idx, 'avg_speed']:.2f}")
+            print(f"   - Throttle medio: {lap_df.loc[best_lap_idx, 'avg_throttle']:.3f}")
+            print(f"   - Brake medio: {lap_df.loc[best_lap_idx, 'avg_brake']:.3f}")
+            print(f"   - Fuori pista: {lap_df.loc[best_lap_idx, 'off_track_pct']:.1f}%")
+            
+            print(f"\n🥺 PEGGIOR GIRO #{lap_df.loc[worst_lap_idx, 'lap']}:")
+            print(f"   - Tempo: {lap_df.loc[worst_lap_idx, 'lap_time']:.3f}s")
+            print(f"   - Velocità media: {lap_df.loc[worst_lap_idx, 'avg_speed']:.2f}")
+            print(f"   - Throttle medio: {lap_df.loc[worst_lap_idx, 'avg_throttle']:.3f}")
+            print(f"   - Brake medio: {lap_df.loc[worst_lap_idx, 'avg_brake']:.3f}")
+            print(f"   - Fuori pista: {lap_df.loc[worst_lap_idx, 'off_track_pct']:.1f}%")
+            
+            # Progressione delle performance
+            if len(lap_df) >= 3:
+                first_3_avg = lap_df.head(3)['lap_time'].mean()
+                last_3_avg = lap_df.tail(3)['lap_time'].mean()
+                improvement = first_3_avg - last_3_avg
+                
+                print(f"\n📊 PROGRESSIONE:")
+                print(f"   - Media primi 3 giri: {first_3_avg:.3f}s")
+                print(f"   - Media ultimi 3 giri: {last_3_avg:.3f}s")
+                print(f"   - {'✅ Miglioramento' if improvement > 0 else '⚠️ Peggioramento'}: {abs(improvement):.3f}s")
+        
+        # 14. VISUALIZZAZIONE GIRI NEL TRACCIATO
+        print("\n14. VISUALIZZAZIONE GIRI NEL TRACCIATO:")
+        print("-" * 40)
+        
+        if len(lap_completions) > 0:
+            fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+            fig.suptitle('ANALISI TRACCIATO PER GIRO', fontsize=16, fontweight='bold')
+            
+            # Mappa colorata per giro
+            sample_data_laps = full_dataframes.iloc[::10]  # Campiona per performance
+            distance = sample_data_laps['distFromStart']
+            lateral_pos = sample_data_laps['trackPos']
+            lap_colors = sample_data_laps['lap_number']
+            
+            # Ricostruisci tracciato
+            angle = distance / 1000
+            x_track = np.cos(angle) * (1000 + lateral_pos * 10)
+            y_track = np.sin(angle) * (1000 + lateral_pos * 10)
+            
+            scatter = axes[0,0].scatter(x_track, y_track, c=lap_colors, cmap='tab10', 
+                                       alpha=0.6, s=2)
+            axes[0,0].set_title('Tracciato Colorato per Giro')
+            axes[0,0].set_xlabel('X (metri)')
+            axes[0,0].set_ylabel('Y (metri)')
+            axes[0,0].axis('equal')
+            plt.colorbar(scatter, ax=axes[0,0], label='Numero Giro')
+            
+            # Posizione laterale per giro (solo primi 5 giri per chiarezza)
+            max_laps_to_show = min(5, int(full_dataframes['lap_number'].max()))
+            colors_laps = plt.cm.tab10(np.linspace(0, 1, max_laps_to_show))
+            
+            for lap_num in range(1, max_laps_to_show + 1):
+                lap_data = full_dataframes[full_dataframes['lap_number'] == lap_num]
+                if len(lap_data) > 0:
+                    # Normalizza gli indici per ogni giro per confronto
+                    lap_progress = np.linspace(0, 100, len(lap_data))
+                    axes[0,1].plot(lap_progress, lap_data['trackPos'], 
+                                  label=f'Giro {lap_num}', alpha=0.7, 
+                                  color=colors_laps[lap_num-1])
+            
+            axes[0,1].axhline(y=1.0, color='red', linestyle='--', alpha=0.5)
+            axes[0,1].axhline(y=-1.0, color='red', linestyle='--', alpha=0.5)
+            axes[0,1].axhline(y=0, color='green', linestyle='-', alpha=0.3)
+            axes[0,1].set_title('Posizione Laterale per Giro (primi 5)')
+            axes[0,1].set_xlabel('Progresso Giro (%)')
+            axes[0,1].set_ylabel('Track Position')
+            axes[0,1].legend()
+            
+            # Velocità per giro
+            for lap_num in range(1, max_laps_to_show + 1):
+                lap_data = full_dataframes[full_dataframes['lap_number'] == lap_num]
+                if len(lap_data) > 0:
+                    lap_progress = np.linspace(0, 100, len(lap_data))
+                    axes[1,0].plot(lap_progress, lap_data['speedX'], 
+                                  label=f'Giro {lap_num}', alpha=0.7,
+                                  color=colors_laps[lap_num-1])
+            
+            axes[1,0].set_title('Velocità per Giro (primi 5)')
+            axes[1,0].set_xlabel('Progresso Giro (%)')
+            axes[1,0].set_ylabel('Velocità X')
+            axes[1,0].legend()
+            
+            # Confronto settori tra giri
+            n_sectors = 5
+            sector_analysis = []
+            
+            for lap_num in range(1, int(full_dataframes['lap_number'].max()) + 1):
+                lap_data = full_dataframes[full_dataframes['lap_number'] == lap_num]
+                if len(lap_data) > 10:  # Solo giri con dati sufficienti
+                    # Dividi il giro in settori
+                    sector_size = len(lap_data) // n_sectors
+                    for sector in range(n_sectors):
+                        start_idx = sector * sector_size
+                        end_idx = (sector + 1) * sector_size if sector < n_sectors - 1 else len(lap_data)
+                        sector_data = lap_data.iloc[start_idx:end_idx]
+                        
+                        sector_analysis.append({
+                            'lap': lap_num,
+                            'sector': sector + 1,
+                            'avg_speed': sector_data['speedX'].mean(),
+                            'time': len(sector_data) / 50.0  # Assume 50 FPS
+                        })
+            
+            if sector_analysis:
+                sector_df = pd.DataFrame(sector_analysis)
+                sector_pivot = sector_df.pivot(index='lap', columns='sector', values='avg_speed')
+                
+                im = axes[1,1].imshow(sector_pivot.values, aspect='auto', cmap='RdYlGn')
+                axes[1,1].set_title('Velocità Media per Settore')
+                axes[1,1].set_xlabel('Settore')
+                axes[1,1].set_ylabel('Numero Giro')
+                axes[1,1].set_xticks(range(n_sectors))
+                axes[1,1].set_xticklabels([f'S{i+1}' for i in range(n_sectors)])
+                plt.colorbar(im, ax=axes[1,1], label='Velocità Media')
+            
+            plt.tight_layout()
+            plt.show()
+    
+    else:
+        print("❌ Nessun giro completato rilevato nei dati")
+        print("   Verifica che 'lastLapTime' cambi durante la sessione")
+
+else:
+    print("❌ Colonna 'lastLapTime' non trovata nei dati")
+    print("   Assicurati che i dati TORCS includano le informazioni sui giri")
