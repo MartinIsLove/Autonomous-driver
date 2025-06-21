@@ -24,23 +24,18 @@ FEATURE_SETS = {
         'track_15', 'track_16', 'track_17', 'track_18'
     ],
     'throttle': [
-        'speedX', 'speedY', 'speedZ', 'angle', 'trackPos', 'rpm',
-        'wheelSpinVel_0', 'wheelSpinVel_1', 'wheelSpinVel_2', 'wheelSpinVel_3',
-        'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
-        'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
-        'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
-        'track_15', 'track_16', 'track_17', 'track_18'
+        'speedX', 
+        'angle', 'trackPos','brake',
+        'rpm',
+        'track_7', 'track_8', 'track_9','track_10', 'track_11'
     ],
     'brake': [
-        'speedX', 'speedY', 'speedZ', 'angle', 'trackPos',
-        'wheelSpinVel_0', 'wheelSpinVel_1', 'wheelSpinVel_2', 'wheelSpinVel_3',
-        'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
-        'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
-        'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
-        'track_15', 'track_16', 'track_17', 'track_18'
+        'speedX', 'speedY', 'speedZ',
+        'angle', 'trackPos',
+        'track_7', 'track_8', 'track_9','track_10', 'track_11'
     ],
     'gear': [
-        'speedX', 'rpm', 'throttle', 'brake'
+        'speedX', 'trackPos', 'rpm'
     ]
 }
 
@@ -48,7 +43,7 @@ FEATURE_SETS = {
 OPTIMAL_MODELS = {
     'steer': 'nn',      # Neural Network (R²: 0.8417)
     'throttle': 'nn',   # Neural Network (R²: 0.7748) 
-    'brake': 'rf',      # Random Forest (R²: 0.4260)
+    'brake': 'nn',      # Random Forest (R²: 0.4260)
     'gear': 'rf'        # Random Forest (Accuracy: 0.9780)
 }
 
@@ -100,56 +95,55 @@ def train_single_model(target_name, dataset):
     
     scaler = None
     
-    if target_name == 'gear':
-        # Converti gear da object a numeric, poi a interi per la classificazione
-        y_train = pd.to_numeric(y_train, errors='coerce').round().astype(int)
-        y_test = pd.to_numeric(y_test, errors='coerce').round().astype(int)
-        
-        # Rimuovi eventuali NaN generati dalla conversione
-        mask_train = ~pd.isna(y_train)
-        mask_test = ~pd.isna(y_test)
-        
-        X_train = X_train[mask_train]
-        y_train = y_train[mask_train]
-        X_test = X_test[mask_test]
-        y_test = y_test[mask_test]
-        
-        # Random Forest Classifier
-        model = RandomForestClassifier(
-            n_estimators=150, max_depth=15, min_samples_split=5,
-            random_state=42, n_jobs=-1
-        )
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        score = accuracy_score(y_test, y_pred)
-        metric = "Accuracy"
-        
-    elif target_name in ['steer', 'throttle']:
+    if target_name in ['steer', 'throttle', 'brake']:  # Aggiunto 'brake'
         # Neural Network
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        model = MLPRegressor(
-            hidden_layer_sizes=(128, 64, 32), activation='relu',
-            max_iter=2000, early_stopping=True, validation_fraction=0.1,
-            random_state=42
-        )
+        # Configurazioni specifiche per ciascun controllo
+        
+        if target_name == 'steer':
+            model = MLPRegressor(
+                hidden_layer_sizes=(128, 64, 32), activation='relu',
+                max_iter=2000, early_stopping=True, validation_fraction=0.1,
+                random_state=42
+            )
+        elif target_name == 'throttle':
+            model = MLPRegressor(
+                hidden_layer_sizes=(128, 64, 32), activation='relu',
+                max_iter=2000, early_stopping=True, validation_fraction=0.1,
+                random_state=42
+            )
+        elif target_name == 'brake':
+            model = MLPRegressor(
+                hidden_layer_sizes=(64, 32, 16), activation='relu',
+                max_iter=2000, early_stopping=True, validation_fraction=0.1,
+                random_state=42, alpha=0.01 
+            )
+        else:
+            raise ValueError(f"Unknown target_name: {target_name}")
+        
         model.fit(X_train_scaled, y_train)
         y_pred = model.predict(X_test_scaled)
         score = r2_score(y_test, y_pred)
         metric = "R²"
         
-    else:  # brake
-        # Random Forest Regressor
-        model = RandomForestRegressor(
-            n_estimators=150, max_depth=15, min_samples_split=5,
-            random_state=42, n_jobs=-1
+    else:  # gear (solo gear rimane Random Forest)
+        # Random Forest Classifier
+        model = RandomForestClassifier(
+            n_estimators=1000,
+            max_depth=50,
+            min_samples_split=2,
+            min_samples_leaf=1,
+            max_features='sqrt',
+            random_state=42,
+            n_jobs=-1
         )
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
-        score = r2_score(y_test, y_pred)
-        metric = "R²"
+        score = accuracy_score(y_test, y_pred)
+        metric = "Accuracy"
     
     print(f"   {target_name}: {metric} = {score:.4f}")
     return target_name, model, scaler
