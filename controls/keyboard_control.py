@@ -24,22 +24,21 @@ class KeyboardControl(BaseControl):
         """
         # Accelerazione e freno
         if keyboard.is_pressed('w'):
-            self.controls['throttle'] = min(1.0, self.controls['throttle'] + 0.1)
+            self.controls['throttle'] = min(1.0, self.controls['throttle'] + 0.2)
             self.controls['brake'] = 0.0
         elif keyboard.is_pressed('s'):
             self.controls['throttle'] = 0.0
             self.controls['brake'] = min(1.0, self.controls['brake'] + 0.1)
         else:
-            self.controls['throttle'] *= 0.9  # Decelerazione graduale
-            self.controls['brake'] *= 0.9
-
+            self.controls['throttle'] *= 0 # Decelerazione graduale
+            self.controls['brake'] *= 0
         # Sterzo
         if keyboard.is_pressed('d'):
-            self.controls['steer'] = max(-1.0, self.controls['steer'] - 0.05)
+            self.controls['steer'] = max(-1.0, self.controls['steer'] - 0.2)
         elif keyboard.is_pressed('a'):
-            self.controls['steer'] = min(1.0, self.controls['steer'] + 0.05)
+            self.controls['steer'] = min(1.0, self.controls['steer'] + 0.2)
         else:
-            self.controls['steer'] *= 0.95  # Ritorno graduale al centro
+            self.controls['steer'] *= 0  # Ritorno graduale al centro
 
         # Cambio marcia (con controllo per pressione singola)
         if keyboard.is_pressed('q') and not self.gear_keys_pressed['q']:
