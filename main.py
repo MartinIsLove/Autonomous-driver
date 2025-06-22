@@ -10,6 +10,7 @@ from car import Car
 from controls.ai_control import AIControl
 from controls.keyboard_control import KeyboardControl
 from controls.steering_wheel_control import SteeringWheelControl
+from controls.gamepad_controll import DualShockControl
 
 import data_logger 
 
@@ -127,16 +128,27 @@ def main():
 
     model_path = select_model()
 
-    try:
-        steering_wheel_control = SteeringWheelControl()
-        CONTROLLERS["steering_wheel"] = steering_wheel_control
-        print("Controllo da volante disponibile.")
-    except IOError as e:
-        print(f"Attenzione: {e}. Il controllo da volante non sarà disponibile.")
+    # try:
+    #     steering_wheel_control = SteeringWheelControl()
+    #     CONTROLLERS["steering_wheel"] = steering_wheel_control
+    #     print("Controllo da volante disponibile.")
+    # except IOError as e:
+    #     print(f"Attenzione: {e}. Il controllo da volante non sarà disponibile.")
+    
+    CONTROLLERS["keyboard"] = KeyboardControl()
 
+    try:
+        CONTROLLERS["gamepad"] = DualShockControl()
+    except IOError as e:
+        print(f"Attenzione: {e}. Il controller non sarà disponibile.")
+
+    # try:
+    #     CONTROLLERS["steering_wheel"] = SteeringWheelControl()
+    # except IOError as e:
+    #     print(f"Attenzione: {e}. Il controllo da volante non sarà disponibile.")
+   
     if model_path:
         CONTROLLERS["ai"] = AIControl(model_path=model_path)
-    CONTROLLERS["keyboard"] = KeyboardControl()
     
     current_control_mode = "keyboard"
     
