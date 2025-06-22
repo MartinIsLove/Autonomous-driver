@@ -9,7 +9,7 @@
 
 1.  **Clona la repository:**
     ```bash
-    git clone <URL-della-repository>
+    git clone https://github.com/MartinIsLove/Autonomous-driver.git
     cd Autonomous-driver
     ```
 
