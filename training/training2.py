@@ -10,6 +10,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
 from concurrent.futures import ThreadPoolExecutor, as_completed  # Aggiunto
 import winsound
+import time
+from sklearn.preprocessing import LabelEncoder
 # ===============================
 # CONFIGURAZIONE GLOBALE
 # ===============================
@@ -17,25 +19,27 @@ import winsound
 # Feature sets per ogni controllo
 FEATURE_SETS = {
     'steer': [
-        'angle', 'trackPos', 'speedX', 'speedY', 'speedZ',
+        'angle', 'trackPos', 'speedX', 'speedY',
         'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
         'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
         'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
         'track_15', 'track_16', 'track_17', 'track_18'
     ],
     'throttle': [
-        'speedX', 
+        'speedX', 'speedY', 
         'angle', 'trackPos','brake',
         'rpm',
         'track_7', 'track_8', 'track_9','track_10', 'track_11'
     ],
     'brake': [
-        'speedX', 'speedY', 'speedZ',
+        'speedX', 'speedY',
         'angle', 'trackPos',
         'track_7', 'track_8', 'track_9','track_10', 'track_11'
     ],
     'gear': [
-        'speedX', 'trackPos', 'rpm'
+        'speedX', 'trackPos', 'rpm', 
+        'angle', 'track_7', 'track_8', 'track_9', 'track_10', 'track_11',
+        'throttle', 'brake', 'speedY'
     ]
 }
 
@@ -97,6 +101,7 @@ def train_single_model(target_name, dataset):
     
     if target_name in ['steer', 'throttle', 'brake']:  # Aggiunto 'brake'
         # Neural Network
+        le = None
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
@@ -126,27 +131,30 @@ def train_single_model(target_name, dataset):
         
         model.fit(X_train_scaled, y_train)
         y_pred = model.predict(X_test_scaled)
-        score = r2_score(y_test, y_pred)
+        y_test_enc = le.transform(y_test) if le else y_test
+        score = r2_score(y_test_enc, y_pred)
         metric = "R²"
         
     else:  # gear (solo gear rimane Random Forest)
         # Random Forest Classifier
+        le = LabelEncoder()
+        y_train_enc = le.fit_transform(y_train)
         model = RandomForestClassifier(
-            n_estimators=1000,
-            max_depth=50,
-            min_samples_split=2,
-            min_samples_leaf=1,
+            n_estimators=150,
+            max_depth=100,
+            min_samples_split=20,
+            min_samples_leaf=5,
             max_features='sqrt',
             random_state=42,
             n_jobs=-1
         )
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train_enc)
         y_pred = model.predict(X_test)
         score = accuracy_score(y_test, y_pred)
         metric = "Accuracy"
     
     print(f"   {target_name}: {metric} = {score:.4f}")
-    return target_name, model, scaler
+    return target_name, model, scaler, le
 
 def train_models(data_dir):
     """Training parallelo di tutti i modelli"""
@@ -154,10 +162,13 @@ def train_models(data_dir):
     
     models = {}
     scalers = {}
+    encoders = {}
     
     print("\n" + "="*50)
     print("TRAINING MODELLI PARALLELO")
     print("="*50)
+
+    start_time = time.time()
     
     # Training parallelo
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -167,15 +178,19 @@ def train_models(data_dir):
         }
         
         for future in as_completed(futures):
-            target_name, model, scaler = future.result()
+            target_name, model, scaler, encoder = future.result()
             models[target_name] = model
             if scaler:
                 scalers[target_name] = scaler
+            if encoder:
+                encoders[target_name] = encoder
     
-    print(f"\nTutti i modelli completati!")
-    return models, scalers
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"\nTutti i modelli completati! Tempo totale: {elapsed_time:.2f} secondi")
+    return models, scalers, encoders
 
-def predict(sensor_data, models, scalers):
+def predict(sensor_data, models, scalers, encoders):
     """
     Predice i controlli completi per un dato stato dei sensori
     
@@ -225,7 +240,9 @@ def predict(sensor_data, models, scalers):
     features_gear = FEATURE_SETS['gear']
     X_input_gear = np.array([[sensor_data[f] for f in features_gear]])
     pred_gear = models['gear'].predict(X_input_gear)[0]
-    pred_gear = int(max(-1, min(6, pred_gear)))
+    pred_gear_enc = models['gear'].predict(X_input_gear)[0]
+    pred_gear = encoders['gear'].inverse_transform([pred_gear_enc])[0]  # Decodifica l'etichetta
+    # pred_gear = int(max(-1, min(6, pred_gear)))
     predictions['gear'] = pred_gear
     
     return predictions
@@ -261,7 +278,7 @@ def load_model(filepath):
 if __name__ == "__main__":
     # Training
     data_dir = './torcs_training_data'
-    models, scalers = train_models(data_dir)
+    models, scalers, encoders = train_models(data_dir)
     
     # Salva il modello in una cartella con timestamp
     now = datetime.now()
