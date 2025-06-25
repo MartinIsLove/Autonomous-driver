@@ -20,6 +20,7 @@ class AIControl(BaseControl):
         self.prev_gear = 3
         self.models = {}
         self.scalers = {}
+        self.encoders = {}
         self.feature_sets = {}
         self.optimal_models = {}
         
@@ -28,7 +29,7 @@ class AIControl(BaseControl):
         self.output_queue = queue.Queue(maxsize=1)
         self.stop_event = threading.Event()
         self.ai_thread = None
-        self.last_controls = {"steer": 0.0, "throttle": 0.3, "brake": 0.0, "gear": 1}
+        self.last_controls = {"steer": 0.0, "throttle": 0.0, "brake": 0.0, "gear": 0}
         
         # Carica il modello
         self.load_model()
@@ -44,6 +45,7 @@ class AIControl(BaseControl):
             
             self.models = model_data['models']
             self.scalers = model_data['scalers']
+            self.encoders = model_data.get('encoders', {})
             self.feature_sets = model_data['feature_sets']
             self.optimal_models = model_data['optimal_models']
             
@@ -150,7 +152,12 @@ class AIControl(BaseControl):
                 else:
                     pred = self.models[target_name].predict(X_input)[0]
                 
-                if target_name == 'steer':
+                if target_name == 'gear' and target_name in self.encoders:
+                    # pred è già il valore encoded dal RandomForest
+                    pred_gear_encoded = int(pred)
+                    pred = self.encoders[target_name].inverse_transform([pred_gear_encoded])[0]
+                    pred = int(pred)  # Assicurati che sia un intero
+                elif target_name == 'steer':
                     pred = np.clip(pred, -1.0, 1.0)
                 elif target_name in ['throttle', 'brake']:
                     pred = np.clip(pred, 0.0, 1.0)

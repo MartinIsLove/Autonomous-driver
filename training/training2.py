@@ -3,15 +3,15 @@ import pandas as pd
 import numpy as np
 import pickle
 from datetime import datetime
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, r2_score, accuracy_score
-from concurrent.futures import ThreadPoolExecutor, as_completed  # Aggiunto
-import winsound
-import time
 from sklearn.preprocessing import LabelEncoder
+from sklearn.neural_network import MLPRegressor
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, accuracy_score
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import winsound
+
 # ===============================
 # CONFIGURAZIONE GLOBALE
 # ===============================
@@ -19,27 +19,38 @@ from sklearn.preprocessing import LabelEncoder
 # Feature sets per ogni controllo
 FEATURE_SETS = {
     'steer': [
-        'angle', 'trackPos', 'speedX', 'speedY',
+        'angle', 'trackPos', 'speedX', 'speedY', 'speedZ',
         'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
         'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
         'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
-        'track_15', 'track_16', 'track_17', 'track_18'
+        'track_15', 'track_16', 'track_17', 'track_18',
+        'throttle', 'brake', 'rpm', 'gear'
     ],
     'throttle': [
+        'brake', 'gear','steer',
         'speedX', 'speedY', 
         'angle', 'trackPos','brake',
         'rpm',
-        'track_7', 'track_8', 'track_9','track_10', 'track_11'
+        'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
+        'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
+        'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
+        'track_15', 'track_16', 'track_17', 'track_18',
     ],
     'brake': [
-        'speedX', 'speedY',
+        'throttle', 'gear','steer','rpm',
+        'speedX','speedY', 'speedZ',
         'angle', 'trackPos',
-        'track_7', 'track_8', 'track_9','track_10', 'track_11'
+        'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
+        'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
+        'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
+        'track_15', 'track_16', 'track_17', 'track_18',
     ],
     'gear': [
-        'speedX', 'trackPos', 'rpm', 
-        'angle', 'track_7', 'track_8', 'track_9', 'track_10', 'track_11',
-        'throttle', 'brake', 'speedY'
+        'throttle', 'brake',
+        'trackPos', 'rpm',
+        'speedX','speedY', 'speedZ',
+        'angle', 'trackPos',             
+        'track_7', 'track_8', 'track_9', 'track_10', 'track_11'
     ]
 }
 
@@ -98,63 +109,76 @@ def train_single_model(target_name, dataset):
     )
     
     scaler = None
+    encoder = None
     
-    if target_name in ['steer', 'throttle', 'brake']:  # Aggiunto 'brake'
+    if target_name in ['steer', 'throttle', 'brake']:
         # Neural Network
-        le = None
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
         # Configurazioni specifiche per ciascun controllo
-        
+    
         if target_name == 'steer':
             model = MLPRegressor(
-                hidden_layer_sizes=(128, 64, 32), activation='relu',
-                max_iter=2000, early_stopping=True, validation_fraction=0.1,
+                hidden_layer_sizes=(128, 64, 16), 
+                activation='tanh',
+                max_iter=2000,
+                early_stopping=True,
+                validation_fraction=0.15,
+                # alpha=0.001, 
+                # learning_rate_init=0.0005,
+                # solver='adam',
+                # batch_size='auto',
                 random_state=42
             )
         elif target_name == 'throttle':
             model = MLPRegressor(
-                hidden_layer_sizes=(128, 64, 32), activation='relu',
-                max_iter=2000, early_stopping=True, validation_fraction=0.1,
+                hidden_layer_sizes=(32, 32, 16), 
+                activation='relu',
+                max_iter=2000, 
+                early_stopping=True, 
+                validation_fraction=0.1,
                 random_state=42
             )
         elif target_name == 'brake':
             model = MLPRegressor(
-                hidden_layer_sizes=(64, 32, 16), activation='relu',
-                max_iter=2000, early_stopping=True, validation_fraction=0.1,
-                random_state=42, alpha=0.01 
+                hidden_layer_sizes=(32, 32, 16),
+                activation='relu',
+                max_iter=2000,
+                early_stopping=True, 
+                validation_fraction=0.1,
+                # alpha=0.0005,
+                # learning_rate_init=0.001,
+                random_state=42
             )
-        else:
-            raise ValueError(f"Unknown target_name: {target_name}")
-        
-        model.fit(X_train_scaled, y_train)
-        y_pred = model.predict(X_test_scaled)
-        y_test_enc = le.transform(y_test) if le else y_test
-        score = r2_score(y_test_enc, y_pred)
+        model.fit(X_train_scaled, y_train) # type: ignore
+        y_pred = model.predict(X_test_scaled) # type: ignore
+        score = r2_score(y_test, y_pred)
         metric = "R²"
         
-    else:  # gear (solo gear rimane Random Forest)
-        # Random Forest Classifier
-        le = LabelEncoder()
-        y_train_enc = le.fit_transform(y_train)
+    else:
+        # Encode le marce per Random Forest
+        encoder = LabelEncoder()
+        y_train_encoded = encoder.fit_transform(y_train)
+        y_test_encoded = encoder.transform(y_test)
+        
         model = RandomForestClassifier(
-            n_estimators=150,
-            max_depth=100,
+            n_estimators=128,
+            max_depth=16,
             min_samples_split=20,
-            min_samples_leaf=5,
-            max_features='sqrt',
+            min_samples_leaf=6,
+            max_features='log2',
             random_state=42,
             n_jobs=-1
         )
-        model.fit(X_train, y_train_enc)
-        y_pred = model.predict(X_test)
-        score = accuracy_score(y_test, y_pred)
+        model.fit(X_train, y_train_encoded)
+        y_pred_encoded = model.predict(X_test)
+        score = accuracy_score(y_test_encoded, y_pred_encoded)
         metric = "Accuracy"
     
     print(f"   {target_name}: {metric} = {score:.4f}")
-    return target_name, model, scaler, le
+    return target_name, model, scaler, encoder # type: ignore
 
 def train_models(data_dir):
     """Training parallelo di tutti i modelli"""
@@ -167,8 +191,6 @@ def train_models(data_dir):
     print("\n" + "="*50)
     print("TRAINING MODELLI PARALLELO")
     print("="*50)
-
-    start_time = time.time()
     
     # Training parallelo
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -185,9 +207,7 @@ def train_models(data_dir):
             if encoder:
                 encoders[target_name] = encoder
     
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    print(f"\nTutti i modelli completati! Tempo totale: {elapsed_time:.2f} secondi")
+    print(f"\nTutti i modelli completati!")
     return models, scalers, encoders
 
 def predict(sensor_data, models, scalers, encoders):
@@ -230,28 +250,28 @@ def predict(sensor_data, models, scalers, encoders):
     # ===============================
     features_brake = FEATURE_SETS['brake']
     X_input_brake = np.array([[sensor_data[f] for f in features_brake]])
+    X_input_brake = scalers['brake'].transform(X_input_brake)
     pred_brake = models['brake'].predict(X_input_brake)[0]
     pred_brake = np.clip(pred_brake, 0.0, 1.0)
     predictions['brake'] = pred_brake
     
     # ===============================
-    # PREDIZIONE GEAR
+    # PREDIZIONE GEAR (CORRETTA)
     # ===============================
     features_gear = FEATURE_SETS['gear']
     X_input_gear = np.array([[sensor_data[f] for f in features_gear]])
-    pred_gear = models['gear'].predict(X_input_gear)[0]
-    pred_gear_enc = models['gear'].predict(X_input_gear)[0]
-    pred_gear = encoders['gear'].inverse_transform([pred_gear_enc])[0]  # Decodifica l'etichetta
-    # pred_gear = int(max(-1, min(6, pred_gear)))
+    pred_gear_encoded = models['gear'].predict(X_input_gear)[0]
+    pred_gear = encoders['gear'].inverse_transform([pred_gear_encoded])[0]
     predictions['gear'] = pred_gear
     
     return predictions
 
-def save_model(models, scalers, filepath):
+def save_model(models, scalers, encoders, filepath):
     """Salva il modello trainato"""
     model_data = {
         'models': models,
         'scalers': scalers,
+        'encoders': encoders,
         'feature_sets': FEATURE_SETS,
         'optimal_models': OPTIMAL_MODELS
     }
@@ -267,15 +287,20 @@ def load_model(filepath):
     
     models = model_data['models']
     scalers = model_data['scalers']
+    encoders = model_data.get('encoders', {})
     
     print(f"Modello caricato da: {filepath}")
-    return models, scalers
+    return models, scalers, encoders
 
 # ===============================
 # TRAINING E TESTING
 # ===============================
 
 if __name__ == "__main__":
+
+    import time
+    start = time.time()
+
     # Training
     data_dir = './torcs_training_data'
     models, scalers, encoders = train_models(data_dir)
@@ -287,7 +312,7 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
     
     model_path = os.path.join(model_dir, 'torcs_optimal_model.pkl')
-    save_model(models, scalers, model_path)
+    save_model(models, scalers, encoders, model_path)
     
     # Test con dati di esempio
     print("\n" + "="*50)
@@ -308,7 +333,7 @@ if __name__ == "__main__":
         test_input[feature] = test_data[feature].iloc[sample_idx]
     
     # Predizione
-    controls = predict(test_input, models, scalers)
+    controls = predict(test_input, models, scalers, encoders)
     
     print("🔍 Confronto Predizione vs Realtà:")
     print("-" * 40)
@@ -339,3 +364,6 @@ if __name__ == "__main__":
     
     print(f"\nModello ottimale pronto per l'uso!")
     winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS)
+
+    end = time.time()
+    print(f"\nTempo totale di esecuzione: {end - start:.2f} secondi")
