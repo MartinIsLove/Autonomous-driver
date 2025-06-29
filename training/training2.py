@@ -22,9 +22,8 @@ FEATURE_SETS = {
         'angle', 'trackPos', 
         'speedX', 'speedY',
         'brake',
-        'throttle',         # Aggiunta - accelerazione influenza sterzo
+        'throttle', 
         
-        # Sensori pista ottimizzati per steering
         'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
         'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
         'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
@@ -36,43 +35,40 @@ FEATURE_SETS = {
         'angle', 'trackPos',
         'rpm', 'gear',
         
-        # Solo sensori essenziali
-        'track_9',                    # Frontale centrale
-        'track_8', 'track_10',        # Frontali laterali
-        'track_6', 'track_12',        # Per curve
-        'track_4', 'track_14',        # Per curve ampie
+        'track_9',
+        'track_8', 'track_10',
+        'track_6', 'track_12',
+        'track_4', 'track_14',
     ],
 
     'brake': [
         'throttle', 'steer',
         'speedX', 'speedY',
         'angle', 'trackPos',
-        'rpm',              # Per engine brake
-        'gear',             # Marcia influenza frenata
+        'rpm',
+        'gear',
         
-        # Sensori pista ottimizzati (solo i più rilevanti)
-        'track_8', 'track_9', 'track_10',  # Frontali
-        'track_7', 'track_11',             # Laterali vicini
-        'track_6', 'track_12',             # Laterali medi
-        'track_5', 'track_13',             # Per curve ampie
-        'track_0', 'track_18',             # Laterali estremi
+        'track_8', 'track_9', 'track_10',
+        'track_7', 'track_11',
+        'track_6', 'track_12',
+        'track_5', 'track_13',
+        'track_0', 'track_18',
     ],
 
     'gear': [
-        'rpm',              # Fondamentale - giri motore
-        'speedX',           # Velocità longitudinale
-        'speedY',           # Velocità laterale (per curve)
-        'angle',            # Angolo auto rispetto alla pista
-        'trackPos',         # Posizione sulla pista
-        'throttle',         # Accelerazione corrente
-        'brake',            # Frenata corrente
-        'steer',            # Sterzo (per curve strette)
-        
-        # Sensori pista (per anticipare curve e rettilinei)
-        'track_9',          # Sensore frontale centrale
-        'track_8', 'track_10',  # Sensori frontali laterali
-        'track_7', 'track_11',  # Sensori più laterali
-        'track_6', 'track_12',  # Per curve più ampie
+        'rpm',              
+        'speedX',           
+        'speedY',           
+        'angle',            
+        'trackPos',         
+        'throttle',         
+        'brake',            
+        'steer',            
+         
+        'track_9',         
+        'track_8', 'track_10',
+        'track_7', 'track_11',
+        'track_6', 'track_12',
     ]
 }
 
@@ -122,8 +118,8 @@ def train_single_model(target_name, dataset):
     y = dataset[target_name]
     
     # Pulizia dati
-    mask = ~(X.isnull().any(axis=1) | y.isnull())
-    X, y = X[mask], y[mask]
+    # mask = ~(X.isnull().any(axis=1) | y.isnull())
+    # X, y = X[mask], y[mask]
     
     # Split
     X_train, X_test, y_train, y_test = train_test_split(
