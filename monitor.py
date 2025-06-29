@@ -14,7 +14,6 @@ class TorcsGUI:
         self.root.geometry("1200x800")
         self.root.configure(bg='#1e1e1e')
         
-        # Variabili
         self.port = 3002
         self.sock = None
         self.running = False
@@ -22,7 +21,6 @@ class TorcsGUI:
         self.start_time = time.time()
         self.data_queue = queue.Queue()
         
-        # Font
         self.title_font = font.Font(family="Arial", size=12, weight="bold")
         self.data_font = font.Font(family="Consolas", size=10)
         self.small_font = font.Font(family="Arial", size=9)
@@ -32,7 +30,6 @@ class TorcsGUI:
         self.start_monitoring()
         
     def setup_gui(self):
-        """Crea l'interfaccia grafica"""
         main_frame = tk.Frame(self.root, bg='#1e1e1e')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
@@ -48,7 +45,6 @@ class TorcsGUI:
         right_frame = tk.Frame(columns_frame, bg='#2d2d2d', relief=tk.RAISED, bd=2)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
         
-        # Sezioni
         self.create_main_info_section(left_frame)
         self.create_sensors_section(left_frame)
         self.create_position_section(right_frame)
@@ -62,7 +58,7 @@ class TorcsGUI:
         return section_frame
         
     def create_main_info_section(self, parent):
-        frame = self.create_section_frame(parent, "🏎️ STATO AUTO")
+        frame = self.create_section_frame(parent, "STATO AUTO")
         self.main_labels = self._create_labels(frame, [
             ("🚀 Velocità:", "speed_kmh", "km/h"), ("📏 speedX", "speedX_ms", ""),
             ("⚙️ Marcia:", "gear", ""), ("📏 speedY:", "speedY", ""), 
@@ -152,9 +148,8 @@ class TorcsGUI:
     
     def update_gui(self, data_dict):
         """Aggiorna l'interfaccia con i nuovi dati."""
-        # MODIFICA: speedX è già in km/h, non viene più convertito per il campo "Velocità"
         speed_kmh = data_dict.get('speedX', 0.0)
-        speed_ms = speed_kmh / 3.6 # Calcola m/s per il campo "Vel. X"
+        speed_ms = speed_kmh / 3.6 
         
         self.safe_update_label(self.main_labels['speed_kmh'], f"{speed_kmh:.1f}")
         self.safe_update_label(self.main_labels['speedX_ms'], f"{speed_ms:.3f}")
@@ -165,7 +160,7 @@ class TorcsGUI:
         self.safe_update_label(self.main_labels['gear'], f"{int(data_dict.get('gear', 0))}")
         self.safe_update_label(self.main_labels['rpm'], f"{data_dict.get('rpm', 0.0):.0f}")
         self.safe_update_label(self.main_labels['fuel'], f"{data_dict.get('fuel', 0.0):.1f}")
-        # MODIFICA: Aggiorna la label dei danni
+
         self.safe_update_label(self.main_labels['damage'], f"{int(data_dict.get('damage', 0))}")
         
         self.safe_update_label(self.position_labels['distFromStart'], f"{data_dict.get('distFromStart', 0.0):.1f}")
@@ -185,16 +180,13 @@ class TorcsGUI:
                     angle = self.sensor_angles[i]
                     rad_angle = math.radians(angle - 90)
                     
-                    # Scale distance to line length
                     line_len = min(distance, 200.0) / 200.0 * max_len
                     
                     end_x = center_x + line_len * math.cos(rad_angle)
                     end_y = center_y + line_len * math.sin(rad_angle)
                     
-                    # Update line coordinates
                     self.sensor_canvas.coords(line, center_x, center_y, end_x, end_y)
                     
-                    # Update line color based on distance
                     color = '#ff0000' if distance < 20 else '#ffff00' if distance < 50 else '#00ff00'
                     self.sensor_canvas.itemconfig(line, fill=color)
         
@@ -208,7 +200,6 @@ class TorcsGUI:
         self.safe_update_label(self.opponent_labels['total'], sum(1 for d in opponents if d < 200))
     
     def monitor_thread(self):
-        """Thread che riceve dati e li mette in coda."""
         while self.running:
             try:
                 data, addr = self.sock.recvfrom(4096)
@@ -223,7 +214,6 @@ class TorcsGUI:
                 if self.running: print(f"Errore monitor: {e}")
     
     def process_queue(self):
-        """Processa la coda e aggiorna la GUI e il sistema."""
         try:
             while not self.data_queue.empty():
                 data_dict = self.data_queue.get_nowait()

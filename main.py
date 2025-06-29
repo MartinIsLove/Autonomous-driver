@@ -9,8 +9,8 @@ from car import Car
 
 from controls.ai_control import AIControl
 from controls.keyboard_control import KeyboardControl
-from controls.steering_wheel_control import SteeringWheelControl
-from controls.gamepad_controll import DualShockControl
+# from controls.steering_wheel_control import SteeringWheelControl
+# from controls.gamepad_controll import DualShockControl
 
 import data_logger 
 
@@ -21,7 +21,7 @@ running = True
 torcs_process = None
 
 def start_torcs():
-    """Avvia l'eseguibile di TORCS."""
+    """Avvia l'eseguibile di TORCS"""
     global torcs_process
     torcs_exe_path = os.path.join('torcs', 'torcs-exe', 'wtorcs.exe')
     torcs_dir = os.path.dirname(torcs_exe_path)
@@ -30,7 +30,7 @@ def start_torcs():
         print(f"Eseguibile di TORCS non trovato in: {torcs_exe_path}")
         return False
 
-    print("Avvio di TORCS in corso...")
+    print("Avvio di TORCS in corso..")
     try:
         torcs_process = subprocess.Popen(
             [os.path.abspath(torcs_exe_path)], 
@@ -38,7 +38,7 @@ def start_torcs():
             stdout=subprocess.DEVNULL, 
             stderr=subprocess.DEVNULL
         )
-        print("TORCS avviato con successo.")
+        print("TORCS avviato con successo")
         time.sleep(5)  # Attendi che TORCS si inizializzi
         return True
     except Exception as e:
@@ -46,25 +46,25 @@ def start_torcs():
         return False
 
 def stop_torcs():
-    """Arresta il processo di TORCS se è in esecuzione."""
+    """Arresta il processo di TORCS se è in esecuzione"""
     global torcs_process
     if torcs_process:
-        print("Arresto di TORCS in corso...")
+        print("Arresto di TORCS in corso..")
         torcs_process.terminate()
         torcs_process.wait()
-        print("TORCS arrestato.")
+        print("TORCS arrestato")
 
 def select_model():
-    """Permette all'utente di selezionare un modello allenato."""
+    """Permette all'utente di selezionare un modello allenato"""
     models_dir = 'models'
     try:
         available_models = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d)) and d.startswith('model_')]
     except FileNotFoundError:
-        print(f"La cartella '{models_dir}' non è stata trovata.")
+        print(f"La cartella '{models_dir}' non è stata trovata")
         return None
 
     if not available_models:
-        print("Nessun modello trovato. Eseguire prima il training.")
+        print("Nessun modello trovato. Eseguire prima il training")
         return None
 
     # Ordina i modelli per data, dal più recente al più vecchio
@@ -72,7 +72,7 @@ def select_model():
         available_models.sort(key=lambda x: datetime.strptime(x.replace('model_', ''), '%d-%m-%Y_%H-%M-%S'), reverse=True)
     except ValueError as e:
         print(f"Errore nel parsing dei nomi delle cartelle dei modelli: {e}")
-        print("Assicurati che i nomi delle cartelle seguano il formato 'model_gg-mm-aaaa_hh-mm-ss'.")
+        print("Assicurati che i nomi delle cartelle seguano il formato 'model_gg-mm-aaaa_hh-mm-ss'")
         return None
 
     print("\n--- Seleziona un modello ---")
@@ -90,9 +90,9 @@ def select_model():
                 selected_model_name = available_models[choice_idx]
                 break
             else:
-                print("Scelta non valida.")
+                print("Scelta non valida")
         except ValueError:
-            print("Inserisci un numero.")
+            print("Inserisci un numero")
 
     model_path = os.path.join(models_dir, selected_model_name, 'torcs_optimal_model.pkl')
     
@@ -104,7 +104,7 @@ def select_model():
     return model_path
 
 def switch_control_mode():
-    """Switches to the next control mode."""
+    """Switches to the next control mode"""
     global current_control_mode
     modes = list(CONTROLLERS.keys())
     current_index = modes.index(current_control_mode)
@@ -118,7 +118,7 @@ def stop_running():
     print("\n--- Stop signal received ---")
 
 def main():
-    """Main function to run the TORCS client."""
+    """Main function to run the TORCS client"""
     global running, CONTROLLERS, current_control_mode
 
     atexit.register(stop_torcs)
@@ -128,24 +128,17 @@ def main():
 
     model_path = select_model()
 
-    # try:
-    #     steering_wheel_control = SteeringWheelControl()
-    #     CONTROLLERS["steering_wheel"] = steering_wheel_control
-    #     print("Controllo da volante disponibile.")
-    # except IOError as e:
-    #     print(f"Attenzione: {e}. Il controllo da volante non sarà disponibile.")
-    
     CONTROLLERS["keyboard"] = KeyboardControl()
 
-    try:
-        CONTROLLERS["gamepad"] = DualShockControl()
-    except IOError as e:
-        print(f"Attenzione: {e}. Il controller non sarà disponibile.")
+    # try:
+    #     CONTROLLERS["gamepad"] = DualShockControl()
+    # except IOError as e:
+    #     print(f"Attenzione: {e}. Il controller non sarà disponibile")
 
     # try:
     #     CONTROLLERS["steering_wheel"] = SteeringWheelControl()
     # except IOError as e:
-    #     print(f"Attenzione: {e}. Il controllo da volante non sarà disponibile.")
+    #     print(f"Attenzione: {e}. Il controllo da volante non sarà disponibile")
    
     if model_path:
         CONTROLLERS["ai"] = AIControl(model_path=model_path)
@@ -156,40 +149,42 @@ def main():
 
     logging_enabled = False
     csv_filename = None
-    log_choice = input("Vuoi attivare il logging dei dati per l'allenamento? (s/n): ").lower()
+    log_choice = input("Vuoi attivare il logging dei dati per l'allenamento? (s/N): ").lower()
+
     if log_choice == 's':
+
         logging_enabled = True
         csv_filename = data_logger.setup_csv_logging()
-        print(f"Logging telemetria attivo. I dati verranno salvati in {csv_filename}")
+        
+        print(f"Logging telemetria attivo:  {csv_filename}")
 
     keyboard.add_hotkey('z', switch_control_mode)
     keyboard.add_hotkey('esc', stop_running)
-    print("Setup complete. Press 'z' to switch control mode. Press 'esc' to exit.")
+
+    print("Premi Z per cambiare input. Esc to exit")
 
     if not car.connect():
-        print("Failed to connect to TORCS.")
+        print("Failed to connect to TORCS")
         return
 
-    print(f"🏁 Starting control loop with '{current_control_mode.upper()}' mode.")
+    print(f"Input: '{current_control_mode.upper()}'")
     try:
         while running:
             data_dict = car.receive_data()
 
             if data_dict:
                 if data_dict.get('special') == 'shutdown':
-                    print("\nShutdown signal from TORCS received.")
+                    print("\nSTOP")
                     break
                 if data_dict.get('special') == 'restart':
-                    print("\n🔄 Restarting race...")
+                    print("\nRESTART")
                     if hasattr(CONTROLLERS['ai'], 'prev_gear'):
                         CONTROLLERS['ai'].prev_gear = 3
                     continue
 
                 controller = CONTROLLERS[current_control_mode]
-                
                 actions = controller.get_actions(game_state=car)
 
-                # Log dei dati se abilitato
                 if logging_enabled:
                     data_logger.log_telemetry(csv_filename, car.get_state_dict(), actions)
                 
@@ -200,15 +195,15 @@ def main():
                 print(f"\r📊 {car} | Mode: {current_control_mode.upper()}", end='', flush=True)
 
     except KeyboardInterrupt:
-        print("\nUser interruption")
+        
+        print("\nEsc premuto")
     except Exception as e:
-        print(f"\nAn error occurred in the main loop: {e}")
+        print(f"{e}")
     finally:
-        print("\nDisconnecting from TORCS...")
+        print("\nDisconnesisone TORCS..")
         if car.connected:
             car.disconnect()
         keyboard.unhook_all()
-        print("Session ended.")
 
 if __name__ == "__main__":
     main()

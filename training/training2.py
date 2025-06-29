@@ -19,47 +19,69 @@ import winsound
 # Feature sets per ogni controllo
 FEATURE_SETS = {
     'steer': [
-        'angle', 'trackPos', 'speedX', 'speedY', 'speedZ',
+        'angle', 'trackPos', 
+        'speedX', 'speedY',
+        'brake',
+        'throttle',         # Aggiunta - accelerazione influenza sterzo
+        
+        # Sensori pista ottimizzati per steering
         'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
         'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
         'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
         'track_15', 'track_16', 'track_17', 'track_18',
-        'throttle', 'brake', 'rpm', 'gear'
     ],
     'throttle': [
-        'brake', 'gear','steer',
-        'speedX', 'speedY', 
-        'angle', 'trackPos','brake',
-        'rpm',
-        'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
-        'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
-        'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
-        'track_15', 'track_16', 'track_17', 'track_18',
-    ],
-    'brake': [
-        'throttle', 'gear','steer','rpm',
-        'speedX','speedY', 'speedZ',
+        'brake', 'steer',
+        'speedX', 'speedY',
         'angle', 'trackPos',
-        'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
-        'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
-        'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
-        'track_15', 'track_16', 'track_17', 'track_18',
+        'rpm', 'gear',
+        
+        # Solo sensori essenziali
+        'track_9',                    # Frontale centrale
+        'track_8', 'track_10',        # Frontali laterali
+        'track_6', 'track_12',        # Per curve
+        'track_4', 'track_14',        # Per curve ampie
     ],
+
+    'brake': [
+        'throttle', 'steer',
+        'speedX', 'speedY',
+        'angle', 'trackPos',
+        'rpm',              # Per engine brake
+        'gear',             # Marcia influenza frenata
+        
+        # Sensori pista ottimizzati (solo i più rilevanti)
+        'track_8', 'track_9', 'track_10',  # Frontali
+        'track_7', 'track_11',             # Laterali vicini
+        'track_6', 'track_12',             # Laterali medi
+        'track_5', 'track_13',             # Per curve ampie
+        'track_0', 'track_18',             # Laterali estremi
+    ],
+
     'gear': [
-        'throttle', 'brake',
-        'trackPos', 'rpm',
-        'speedX','speedY', 'speedZ',
-        'angle', 'trackPos',             
-        'track_7', 'track_8', 'track_9', 'track_10', 'track_11'
+        'rpm',              # Fondamentale - giri motore
+        'speedX',           # Velocità longitudinale
+        'speedY',           # Velocità laterale (per curve)
+        'angle',            # Angolo auto rispetto alla pista
+        'trackPos',         # Posizione sulla pista
+        'throttle',         # Accelerazione corrente
+        'brake',            # Frenata corrente
+        'steer',            # Sterzo (per curve strette)
+        
+        # Sensori pista (per anticipare curve e rettilinei)
+        'track_9',          # Sensore frontale centrale
+        'track_8', 'track_10',  # Sensori frontali laterali
+        'track_7', 'track_11',  # Sensori più laterali
+        'track_6', 'track_12',  # Per curve più ampie
     ]
 }
 
-# Modelli ottimali identificati
+
 OPTIMAL_MODELS = {
-    'steer': 'nn',      # Neural Network (R²: 0.8417)
-    'throttle': 'nn',   # Neural Network (R²: 0.7748) 
-    'brake': 'nn',      # Random Forest (R²: 0.4260)
-    'gear': 'rf'        # Random Forest (Accuracy: 0.9780)
+    'steer': 'nn',
+    'throttle': 'nn',
+    'brake': 'nn',
+    'gear': 'rf'
 }
 
 # ===============================
@@ -74,7 +96,7 @@ def load_data(data_dir):
     if not all_files:
         raise ValueError(f"Nessun file CSV trovato in: {data_dir}")
     
-    print(f"Caricamento {len(all_files)} file CSV...")
+    print(f"Caricamento {len(all_files)} file CSV..")
     
     for file in all_files:
         try:
@@ -94,7 +116,7 @@ def load_data(data_dir):
 
 def train_single_model(target_name, dataset):
     """Training di un singolo modello"""
-    print(f"\nTraining {target_name.upper()}...")
+    print(f"\nTraining {target_name.upper()}..")
     
     X = dataset[FEATURE_SETS[target_name]]
     y = dataset[target_name]
@@ -121,7 +143,7 @@ def train_single_model(target_name, dataset):
     
         if target_name == 'steer':
             model = MLPRegressor(
-                hidden_layer_sizes=(128, 64, 16), 
+                hidden_layer_sizes=(256, 128, 64, 32, 16), 
                 activation='tanh',
                 max_iter=2000,
                 early_stopping=True,
@@ -134,22 +156,28 @@ def train_single_model(target_name, dataset):
             )
         elif target_name == 'throttle':
             model = MLPRegressor(
-                hidden_layer_sizes=(32, 32, 16), 
-                activation='relu',
+                hidden_layer_sizes=(128, 128, 64, 32), 
+                activation='tanh',
                 max_iter=2000, 
                 early_stopping=True, 
-                validation_fraction=0.1,
+                validation_fraction=0.15,
+                # alpha=0.001, 
+                # learning_rate_init=0.0005,
+                # solver='adam',
+                # batch_size='auto',
                 random_state=42
             )
         elif target_name == 'brake':
             model = MLPRegressor(
-                hidden_layer_sizes=(32, 32, 16),
+                hidden_layer_sizes=(128, 64, 32),
                 activation='relu',
                 max_iter=2000,
                 early_stopping=True, 
-                validation_fraction=0.1,
-                # alpha=0.0005,
-                # learning_rate_init=0.001,
+                validation_fraction=0.15,
+                # alpha=0.0001, 
+                # learning_rate_init=0.0005,
+                # solver='adam',
+                # batch_size='auto',
                 random_state=42
             )
         model.fit(X_train_scaled, y_train) # type: ignore

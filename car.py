@@ -7,10 +7,10 @@ class Car:
     
     def __init__(self, host='localhost', port=3001, broadcast_port=3002):
         # === STATO AUTO ===
-        # Posizione e orientamento
+        # Posizione
         self.angle = 0.0           # Angolo rispetto alla direzione della pista
         self.trackPos = 0.0        # Posizione laterale (-1 = sinistra, +1 = destra)
-        self.z = 0.0              # Altezza
+        self.z = 0.0               # Altezza
         
         # Velocità
         self.speedX = 0.0         # Velocità longitudinale
@@ -21,17 +21,14 @@ class Car:
         self.rpm = 0.0            # Giri motore
         self.gear = 0             # Marcia attuale
         
-        # Sensori distanza (19 sensori di traccia)
+        # Sensori bordo 
         self.track = [200.0] * 19
-        
-        # Sensori avversari (36 sensori)
-        self.opponents = [200.0] * 36
         
         # Sensori focus (5 sensori)
         self.focus = [200.0] * 5
         
         # Ruote
-        self.wheelSpinVel = [0.0] * 4  # Velocità rotazione ruote
+        self.wheelSpinVel = [0.0] * 4  # Velocità ruote
         
         # Stato gara
         self.fuel = 100.0         # Carburante
@@ -40,16 +37,14 @@ class Car:
         self.distFromStart = 0.0  # Distanza dal start
         self.curLapTime = 0.0     # Tempo giro corrente
         self.lastLapTime = 0.0    # Tempo ultimo giro
-        self.racePos = 1          # Posizione in gara
         
         # === CONTROLLI AUTO ===
         self.throttle = 0.0      # Accelerazione (0.0 - 1.0)
         self.brake = 0.0      # Frenata (0.0 - 1.0)  
         self.steer = 0.0      # Sterzo (-1.0 - 1.0)
-        self.control_gear = 1 # Marcia comandata (-1, 0, 1-6)
+        self.control_gear = 1 # Marcia (-1, 0, 1-6)
         self.clutch = 0.0     # Frizione (0.0 - 1.0)
-        self.focus_control = 0 # Focus sensori
-        self.meta = 0         # Meta comando
+        self.focus_control = 0 # Focus
         
         # === CONTROLLO ===
         self.control = None
@@ -59,8 +54,7 @@ class Car:
         self.port = port
         self.sock = None
         self.connected = False
-        
-        # Socket per broadcasting dati
+
         self.broadcast_port = broadcast_port
         self.broadcast_sock = None
         self.setup_broadcast()
@@ -69,7 +63,7 @@ class Car:
         """Connette a TORCS"""
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.sock.settimeout(1.0)  # Usa un timeout
+            self.sock.settimeout(1.0) 
             
             # Messaggio di inizializzazione
             init_msg = "SCR(init -90 -75 -60 -45 -30 -20 -15 -10 -5 0 5 10 15 20 30 45 60 75 90)"
@@ -85,7 +79,6 @@ class Car:
             return False
     
     def disconnect(self):
-        """Disconnette da TORCS"""
         if self.sock:
             self.sock.close()
         self.connected = False
@@ -107,16 +100,15 @@ class Car:
         i = 0
         while i < len(message):
             if message[i] == '(':
-                # Trova la fine della chiave
+
                 j = i + 1
                 while j < len(message) and message[j] != ' ':
                     j += 1
                 
                 key = message[i+1:j]
                 
-                # Trova i valori fino alla parentesi di chiusura
                 values = []
-                j += 1  # salta lo spazio
+                j += 1
                 start = j
                 
                 while j < len(message) and message[j] != ')':
@@ -133,7 +125,6 @@ class Car:
                         start = j + 1
                     j += 1
                 
-                # Aggiungi l'ultimo valore
                 if start < j:
                     value = message[start:j]
                     try:
@@ -144,7 +135,6 @@ class Car:
                     except ValueError:
                         values.append(value)
                 
-                # Se c'è un solo valore, non fare una lista
                 if len(values) == 1:
                     data_dict[key] = values[0]
                 else:
@@ -158,7 +148,7 @@ class Car:
     
     def update_state(self, data_dict):
         """Aggiorna lo stato dell'auto dai dati ricevuti"""
-        # Aggiorna i valori dello stato se presenti
+
         if 'angle' in data_dict:
             self.angle = data_dict['angle']
         if 'trackPos' in data_dict:
@@ -177,8 +167,6 @@ class Car:
             self.gear = data_dict['gear']
         if 'track' in data_dict:
             self.track = data_dict['track']
-        if 'opponents' in data_dict:
-            self.opponents = data_dict['opponents']
         if 'focus' in data_dict:
             self.focus = data_dict['focus']
         if 'wheelSpinVel' in data_dict:
@@ -218,11 +206,11 @@ class Car:
 
             # Handle special messages
             if '***RESTART***' in message:
-                print("🔄 Restart signal received.")
+                print("RESTART")
                 return {'special': 'restart'}
             
-            if '***SHUTDOWN***' in message:
-                print("🛑 Shutdown signal received.")
+            if '***STOP***' in message:
+                print("STOP")
                 return {'special': 'shutdown'}
 
             data_dict = self.parse_message(message)
@@ -235,7 +223,7 @@ class Car:
         except socket.timeout:
             return None # Non è un errore, succede
         except Exception as e:
-            print(f"❌ Errore ricezione dati: {e}")
+            print(f"Errore ricezione dati: {e}")
             return None
     
     def send_controls(self):
@@ -261,7 +249,7 @@ class Car:
         """Converte i controlli in stringa formato TORCS"""
         return (f"(accel {self.throttle})(brake {self.brake})"
                 f"(gear {self.control_gear})(steer {self.steer})"
-                f"(clutch {self.clutch})(focus {self.focus_control})(meta {self.meta})")
+                f"(clutch {self.clutch})(focus {self.focus_control})")
     
     def validate_and_clip_controls(self):
         """Valida e limita i valori di controllo nei range corretti"""
@@ -288,7 +276,7 @@ class Car:
         return self.validate_and_clip_controls()
     
     def get_state_dict(self):
-        """Restituisce lo stato corrente dell'auto come dizionario."""
+        """Restituisce lo stato corrente dell'auto come dizionario"""
         return {
             'angle': self.angle,
             'trackPos': self.trackPos,
@@ -299,7 +287,6 @@ class Car:
             'rpm': self.rpm,
             'gear': self.gear,
             'track': self.track,
-            'opponents': self.opponents,
             'focus': self.focus,
             'wheelSpinVel': self.wheelSpinVel,
             'fuel': self.fuel,
@@ -312,5 +299,5 @@ class Car:
         }
     
     def set_control(self, control):
-        """Imposta la strategia di controllo."""
+        """Imposta la strategia di controllo"""
         self.control = control

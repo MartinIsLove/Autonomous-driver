@@ -3,15 +3,15 @@ import numpy as np
 from .base_control import BaseControl
 
 class DualShockControl(BaseControl):
-    """Gestisce i controlli da controller DualShock PS4."""
+    """Gestisce i controlli da controller DualShock PS4"""
 
     def __init__(self):
-        """Inizializza pygame, il joystick e lo stato dei controlli."""
+        """Inizializza pygame, il joystick e lo stato dei controlli"""
         pygame.init()
         pygame.joystick.init()
         
         if pygame.joystick.get_count() == 0:
-            raise IOError("Nessun controller trovato.")
+            raise IOError("Nessun controller trovato")
             
         self.joystick = pygame.joystick.Joystick(0)
         self.joystick.init()
@@ -22,24 +22,23 @@ class DualShockControl(BaseControl):
         self.prev_gear_up = False
         self.prev_gear_down = False
         
-        # Zona morta per gli stick analogici
-        self.deadzone = 0.1  # 10% di zona morta
+        # Zona morta
+        self.deadzone = 0.1
 
     def apply_deadzone(self, value, deadzone=None):
-        """Applica la zona morta a un valore analogico."""
+        """Applica la zona morta a un valore analogico"""
         if deadzone is None:
             deadzone = self.deadzone
             
         if abs(value) < deadzone:
             return 0.0
         else:
-            # Riscala il valore per mantenere la gamma completa
             sign = 1 if value > 0 else -1
             return sign * (abs(value) - deadzone) / (1.0 - deadzone)
 
     def get_actions(self, *args, **kwargs):
         """
-        Legge l'input dal controller DualShock PS4, calcola le azioni e le restituisce.
+        Legge l'input dal controller
         """
         pygame.event.pump()
         

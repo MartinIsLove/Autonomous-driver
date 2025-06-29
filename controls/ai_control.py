@@ -4,10 +4,8 @@ import pickle
 import numpy as np
 import warnings
 import threading
-import queue
 import time
 
-# Silenzia i warning di sklearn
 warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
 
 class AIControl(BaseControl):
@@ -24,17 +22,14 @@ class AIControl(BaseControl):
         self.feature_sets = {}
         self.optimal_models = {}
         
-        # Threading components
-        self.input_queue = queue.Queue(maxsize=1)
-        self.output_queue = queue.Queue(maxsize=1)
         self.stop_event = threading.Event()
         self.ai_thread = None
-        self.last_controls = {"steer": 0.0, "throttle": 0.0, "brake": 0.0, "gear": 0}
+        self.current_state = None
+        self.current_controls = {"steer": 0.0, "throttle": 0.0, "brake": 0.0, "gear": 0}
+        self.state_lock = threading.Lock()
         
-        # Carica il modello
         self.load_model()
         
-        # Avvia il thread AI
         self.start_ai_thread()
 
     def load_model(self):
@@ -72,42 +67,30 @@ class AIControl(BaseControl):
         print("Thread AI fermato")
 
     def _ai_worker(self):
-        """Worker thread che elabora le predizioni AI"""
+        """Worker per il thread AI che elabora i dati e predice i controlli"""
         while not self.stop_event.is_set():
             try:
-                # Prendi i dati più recenti dalla queue (non bloccante)
-                car_state_obj = None
-                try:
-                    car_state_obj = self.input_queue.get_nowait()
-                except queue.Empty:
-                    time.sleep(0.001)  # Breve pausa per non sovraccaricare la CPU
+                with self.state_lock:
+                    car_state = self.current_state
+                
+                if car_state is None:
+                    time.sleep(0.001)
                     continue
                 
-                if car_state_obj is None:
-                    continue
-                
-                # Elabora i controlli
-                sensor_data = self.get_sensor_dict(car_state_obj)
+                sensor_data = self.get_sensor_dict(car_state)
                 predictions = self.predict_controls(sensor_data)
-                final_controls = predictions  # o self.safety_adjustments(predictions.copy(), car_state_obj)
                 
-                # Metti il risultato nella queue di output (sostituisce se piena)
-                try:
-                    self.output_queue.put_nowait(final_controls)
-                except queue.Full:
-                    # Rimuovi il vecchio risultato e metti quello nuovo
-                    try:
-                        self.output_queue.get_nowait()
-                        self.output_queue.put_nowait(final_controls)
-                    except queue.Empty:
-                        pass
+                predictions = self.safety_adjustments(predictions, car_state)
+                
+                with self.state_lock:
+                    self.current_controls = predictions
                 
             except Exception as e:
                 print(f"Errore nel thread AI: {e}")
                 time.sleep(0.1)
 
     def get_sensor_dict(self, car_state_obj):
-        """Estrae i dati dei sensori dall'oggetto Car e li mette in un dizionario."""
+        """Estrae i dati dei sensori dall'oggetto Car e li mette in un dizionario"""
         sensor_dict = {
             'angle': car_state_obj.angle,
             'trackPos': car_state_obj.trackPos,
@@ -122,126 +105,101 @@ class AIControl(BaseControl):
             'distFromStart': car_state_obj.distFromStart,
             'curLapTime': car_state_obj.curLapTime,
             'lastLapTime': car_state_obj.lastLapTime,
+            'throttle': getattr(car_state_obj, 'throttle', 0.0),
+            'brake': getattr(car_state_obj, 'brake', 0.0),
+            'steer': getattr(car_state_obj, 'steer', 0.0),
         }
         for i, val in enumerate(car_state_obj.track):
             sensor_dict[f'track_{i}'] = val
-        for i, val in enumerate(car_state_obj.opponents):
-            sensor_dict[f'opponents_{i}'] = val
         return sensor_dict
 
     def predict_controls(self, sensor_data):
-        """Predice i controlli usando il modello ottimale"""
+        """Predice i controlli usando il modello ottimale con remapping corretto"""
         
         predictions = {}
         
-        for target_name in ['steer', 'throttle', 'brake', 'gear']:
-            try:
-                features = self.feature_sets[target_name]
-                
-                # Usa sempre array numpy per evitare warning
-                X_input = np.array([[sensor_data.get(f, 0.0) for f in features]])
-                
-                model_type = self.optimal_models[target_name]
-                
-                if model_type == 'nn':
-                    if target_name in self.scalers:
-                        X_input_scaled = self.scalers[target_name].transform(X_input)
-                        pred = self.models[target_name].predict(X_input_scaled)[0]
-                    else:
-                        pred = self.models[target_name].predict(X_input)[0]
-                else:
-                    pred = self.models[target_name].predict(X_input)[0]
-                
-                if target_name == 'gear' and target_name in self.encoders:
-                    # pred è già il valore encoded dal RandomForest
-                    pred_gear_encoded = int(pred)
-                    pred = self.encoders[target_name].inverse_transform([pred_gear_encoded])[0]
-                    pred = int(pred)  # Assicurati che sia un intero
-                elif target_name == 'steer':
-                    pred = np.clip(pred, -1.0, 1.0)
-                elif target_name in ['throttle', 'brake']:
-                    pred = np.clip(pred, 0.0, 1.0)
-                elif target_name == 'gear':
-                    pred = int(max(-1, min(6, round(pred))))
-                
-                predictions[target_name] = pred
-                
-            except Exception as e:
-                print(f"Errore predizione {target_name}: {e}")
-                fallback_values = {
-                    'steer': 0.0,
-                    'throttle': 0.0,
-                    'brake': 0.0,
-                    'gear': 0
-                }
-                predictions[target_name] = fallback_values[target_name]
+        # STEER
+        try:
+            features_steer = self.feature_sets['steer']
+            X_input_steer = np.array([[sensor_data.get(f, 0.0) for f in features_steer]])
+            
+            if 'steer' in self.scalers:
+                X_input_steer = self.scalers['steer'].transform(X_input_steer)
+            
+            pred_steer = self.models['steer'].predict(X_input_steer)[0]
+            predictions['steer'] = np.clip(pred_steer, -1.0, 1.0)
+            
+        except Exception as e:
+            print(f"Errore predizione steer: {e}")
+            predictions['steer'] = 0.0
+        
+        # THROTTLE
+        try:
+            features_throttle = self.feature_sets['throttle']
+            X_input_throttle = np.array([[sensor_data.get(f, 0.0) for f in features_throttle]])
+            
+            if 'throttle' in self.scalers:
+                X_input_throttle = self.scalers['throttle'].transform(X_input_throttle)
+            
+            pred_throttle = self.models['throttle'].predict(X_input_throttle)[0]
+            predictions['throttle'] = np.clip(pred_throttle, 0.0, 1.0)
+            
+        except Exception as e:
+            print(f"Errore predizione throttle: {e}")
+            predictions['throttle'] = 0.0
+        
+        # BRAKE
+        try:
+            features_brake = self.feature_sets['brake']
+            X_input_brake = np.array([[sensor_data.get(f, 0.0) for f in features_brake]])
+            
+            if 'brake' in self.scalers:
+                X_input_brake = self.scalers['brake'].transform(X_input_brake)
+            
+            pred_brake = self.models['brake'].predict(X_input_brake)[0]
+            predictions['brake'] = np.clip(pred_brake, 0.0, 1.0)
+            
+        except Exception as e:
+            print(f"Errore predizione brake: {e}")
+            predictions['brake'] = 0.0
+        
+        # GEAR
+        try:
+            features_gear = self.feature_sets['gear']
+            X_input_gear = np.array([[sensor_data.get(f, 0.0) for f in features_gear]])
+            
+            if 'gear' in self.scalers:
+                X_input_gear = self.scalers['gear'].transform(X_input_gear)
+            
+            pred_gear_encoded = self.models['gear'].predict(X_input_gear)[0]
+            pred_gear = self.encoders['gear'].inverse_transform([pred_gear_encoded])[0]
+            predictions['gear'] = int(pred_gear)
+            
+        except Exception as e:
+            print(f"Errore predizione gear: {e}")
+            predictions['gear'] = 0
         
         return predictions
     
-    def safety_adjustments(self, controls, car_state_obj):
-        """Aggiustamenti di sicurezza basati sullo stato dell'auto"""
+    def safety_adjustments(self, controls, car_state):
+        """Aggiustamenti di sicurezza"""
         
-        if car_state_obj.speedX < 5 and controls['gear'] == 0:
-            controls['gear'] = 1
-            
-        if car_state_obj.speedX < -5:
-            controls['gear'] = -1
-            
-        if controls['throttle'] > 0.1 and controls['brake'] > 0.1:
-            if controls['throttle'] > controls['brake']:
-                controls['brake'] = 0.0
-            else:
-                controls['throttle'] = 0.0
-        
-        if abs(car_state_obj.angle) > 1.0:
-            controls['throttle'] *= 0.5
-            controls['brake'] = max(controls['brake'], 0.3)
-            
-        gear_diff = abs(controls['gear'] - self.prev_gear)
-        if gear_diff > 2:
-            if controls['gear'] > self.prev_gear:
-                controls['gear'] = self.prev_gear + 1
-            else:
-                controls['gear'] = self.prev_gear - 1
-        
-        self.prev_gear = controls['gear']
+        max_speed = 100
+        if car_state.speedX > max_speed:
+            controls['gear'] = 2
         
         return controls
     
     def get_actions(self, *args, **kwargs) -> Dict[str, Any]:
-        """
-        Implementa la logica dell'AI per decidere le azioni
-        in base allo stato del gioco/simulazione (thread-safe).
-        """
+        """Versione semplificata senza queue"""
         car_state_obj = kwargs.get('game_state')
         if not car_state_obj:
-            return self.last_controls.copy()
+            with self.state_lock:
+                return self.current_controls.copy()
 
-        # Invia i dati al thread AI (non bloccante)
-        try:
-            self.input_queue.put_nowait(car_state_obj)
-        except queue.Full:
-            # Sostituisci i dati vecchi con quelli nuovi
-            try:
-                self.input_queue.get_nowait()
-                self.input_queue.put_nowait(car_state_obj)
-            except queue.Empty:
-                pass
-        
-        # Prendi il risultato più recente se disponibile
-        try:
-            new_controls = self.output_queue.get_nowait()
-            self.last_controls = {
-                "steer": float(new_controls['steer']),
-                "throttle": float(new_controls['throttle']),
-                "brake": float(new_controls['brake']),
-                "gear": int(new_controls['gear'])
-            }
-        except queue.Empty:
-            # Usa i controlli precedenti se non ci sono nuovi risultati
-            pass
-        
-        return self.last_controls.copy()
+        with self.state_lock:
+            self.current_state = car_state_obj
+            return self.current_controls.copy()
 
     def __del__(self):
         """Cleanup quando l'oggetto viene distrutto"""
