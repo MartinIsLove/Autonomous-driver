@@ -59,26 +59,3 @@ class SteeringWheelControl(BaseControl):
         
         return self.controls.copy()
 
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    # Simula la corsa reale del pedale freno (premuto = 1, non premuto = 0)
-    raw_brake = np.linspace(0, 1, 100)
-    
-    brake_modulated_01 = 1 - np.log(1 + 50 * (1 - raw_brake)) / np.log(1 + 50)
-    brake_modulated_02 = 1 - np.log(1 + 100 * (1 - raw_brake)) / np.log(1 + 100)
-    brake_modulated_03 = 1 - np.log(1 + 180 * (1 - raw_brake)) / np.log(1 + 180)
-    
-    
-    plt.figure(figsize=(7, 5))
-    plt.plot(raw_brake, brake_modulated_01, label="Curva freno (sensibilità 50)")
-    plt.plot(raw_brake, brake_modulated_02, label="Curva freno (sensibilità 100)")
-    plt.plot(raw_brake, brake_modulated_03, label="Curva freno (sensibilità 180)")
-    plt.plot(raw_brake, raw_brake, '--', label="Lineare (nessuna modulazione)")
-    plt.title("Risposta del freno: pedale reale vs valore inviato al gioco")
-    plt.xlabel("Pedale freno reale (0: non premuto → 1: premuto)")
-    plt.ylabel("Valore freno inviato al gioco")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()

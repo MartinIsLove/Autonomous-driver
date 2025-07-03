@@ -12,7 +12,7 @@ class KeyboardControl(BaseControl):
             'gear': 1,
             'clutch': 0.0
         }
-        # Mappatura per i cambi di marcia per evitare cambiate multiple
+
         self.gear_keys_pressed = {
             'q': False,
             'e': False
@@ -40,7 +40,7 @@ class KeyboardControl(BaseControl):
         else:
             self.controls['steer'] *= 0  # Ritorno graduale al centro
 
-        # Cambio marcia (con controllo per pressione singola)
+        # Cambio marcia
         if keyboard.is_pressed('q') and not self.gear_keys_pressed['q']:
             self.controls['gear'] = max(-1, self.controls['gear'] - 1)
             self.gear_keys_pressed['q'] = True

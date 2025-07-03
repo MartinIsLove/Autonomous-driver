@@ -275,7 +275,7 @@ def optimize_architectures(data_dir, n_workers=None):
     # Risultati
     all_results = {}
     
-    for target_name in ['steer']:
+    for target_name in ['throttle']:
         print(f"\n{'='*60}")
         print(f"OTTIMIZZAZIONE ARCHITETTURA PER: {target_name.upper()}")
         print(f"{'='*60}")

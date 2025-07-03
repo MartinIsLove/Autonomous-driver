@@ -202,5 +202,4 @@ class AIControl(BaseControl):
             return self.current_controls.copy()
 
     def __del__(self):
-        """Cleanup quando l'oggetto viene distrutto"""
         self.stop_ai_thread()

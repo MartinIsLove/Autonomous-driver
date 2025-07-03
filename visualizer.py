@@ -61,9 +61,9 @@ axes[0,0].legend()
 
 # Brake
 axes[0,1].hist(full_dataframes['brake'], bins=50, alpha=0.7, color='red')
-axes[0,1].set_title('Distribuzione Brake')
-axes[0,1].set_xlabel('Valore Brake')
-axes[0,1].axvline(full_dataframes['brake'].mean(), color='blue', linestyle='--', label=f'Media: {full_dataframes["brake"].mean():.3f}')
+axes[0,1].set_title('Brake Distribution')
+axes[0,1].set_xlabel('Brake Value')
+axes[0,1].axvline(full_dataframes['brake'].mean(), color='blue', linestyle='--', label=f'Avarage: {full_dataframes["brake"].mean():.3f}')
 axes[0,1].legend()
 
 # Steer
@@ -225,7 +225,7 @@ print("-" * 40)
 
 # Crea mappa del tracciato basata sui dati
 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-fig.suptitle('MAPPA TRACCIATO E POSIZIONE VEICOLO', fontsize=16, fontweight='bold')
+fig.suptitle('.', fontsize=16, fontweight='bold')
 
 # Calcola posizione assoluta del veicolo
 # Usa distFromStart e trackPos per ricostruire il tracciato
@@ -245,9 +245,9 @@ y_track = np.sin(angle) * (1000 + lateral_pos * 10)
 # Colora in base alla posizione: verde = in pista, rosso = fuori pista
 colors = ['green' if abs(pos) <= 1.0 else 'red' for pos in lateral_pos]
 axes[0,0].scatter(x_track, y_track, c=colors, alpha=0.6, s=1)
-axes[0,0].set_title('Tracciato Ricostruito (Verde=In Pista, Rosso=Fuori)')
-axes[0,0].set_xlabel('X (metri)')
-axes[0,0].set_ylabel('Y (metri)')
+axes[0,0].set_title('Reconstructed Track (Green=On Track, Red=Off Track)')
+axes[0,0].set_xlabel('X (meters)')
+axes[0,0].set_ylabel('Y (meters)')
 axes[0,0].axis('equal')
 
 # Mappa 2: Posizione laterale nel tempo

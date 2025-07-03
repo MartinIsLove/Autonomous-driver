@@ -11,6 +11,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, accuracy_score
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import winsound
+# Per grafici
+import matplotlib.pyplot as plt
 
 # ===============================
 # CONFIGURAZIONE GLOBALE
@@ -24,10 +26,16 @@ FEATURE_SETS = {
         'brake',
         'throttle', 
         
-        'track_0', 'track_1', 'track_2', 'track_3', 'track_4',
-        'track_5', 'track_6', 'track_7', 'track_8', 'track_9',
-        'track_10', 'track_11', 'track_12', 'track_13', 'track_14',
-        'track_15', 'track_16', 'track_17', 'track_18',
+        'track_0',
+        'track_1', 'track_2',
+        'track_3', 'track_4',
+        'track_5', 'track_6',
+        'track_7', 'track_8',
+        'track_9', 'track_10',
+        'track_11', 'track_12',
+        'track_13', 'track_14',
+        'track_15', 'track_16',
+        'track_17', 'track_18'
     ],
     'throttle': [
         'brake', 'steer',
@@ -38,7 +46,7 @@ FEATURE_SETS = {
         'track_9',
         'track_8', 'track_10',
         'track_6', 'track_12',
-        'track_4', 'track_14',
+        'track_4', 'track_14'
     ],
 
     'brake': [
@@ -47,12 +55,16 @@ FEATURE_SETS = {
         'angle', 'trackPos',
         'rpm',
         'gear',
-        
-        'track_8', 'track_9', 'track_10',
-        'track_7', 'track_11',
-        'track_6', 'track_12',
-        'track_5', 'track_13',
-        'track_0', 'track_18',
+        'track_0', 'track_1',
+        'track_2', 'track_3',
+        'track_4', 'track_5',
+        'track_6', 'track_7',
+        'track_8', 'track_9',
+        'track_10', 'track_11',
+        'track_12', 'track_13',
+        'track_14', 'track_15',
+        'track_16', 'track_17',
+        'track_18'
     ],
 
     'gear': [
@@ -63,12 +75,12 @@ FEATURE_SETS = {
         'trackPos',         
         'throttle',         
         'brake',            
-        'steer',            
-         
-        'track_9',         
+        'steer',
+
+        'track_9',
         'track_8', 'track_10',
-        'track_7', 'track_11',
         'track_6', 'track_12',
+        'track_4', 'track_14'        
     ]
 }
 
@@ -81,7 +93,7 @@ OPTIMAL_MODELS = {
 }
 
 # ===============================
-# FUNZIONI CORE
+# FUNZIONI 
 # ===============================
 
 def load_data(data_dir):
@@ -111,9 +123,7 @@ def load_data(data_dir):
     return dataset
 
 def train_single_model(target_name, dataset):
-    """Training di un singolo modello"""
     print(f"\nTraining {target_name.upper()}..")
-    
     X = dataset[FEATURE_SETS[target_name]]
     y = dataset[target_name]
     
@@ -128,61 +138,59 @@ def train_single_model(target_name, dataset):
     
     scaler = None
     encoder = None
-    
+    history = {}
     if target_name in ['steer', 'throttle', 'brake']:
-        # Neural Network
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
-        
-        # Configurazioni specifiche per ciascun controllo
-    
+        model = None
         if target_name == 'steer':
             model = MLPRegressor(
-                hidden_layer_sizes=(256, 128, 64, 32, 16), 
+                hidden_layer_sizes=(64, 128, 192, 128, 64, 32),
                 activation='tanh',
                 max_iter=2000,
                 early_stopping=True,
                 validation_fraction=0.15,
-                # alpha=0.001, 
-                # learning_rate_init=0.0005,
-                # solver='adam',
-                # batch_size='auto',
-                random_state=42
+                random_state=42,
+                verbose=False
             )
         elif target_name == 'throttle':
             model = MLPRegressor(
-                hidden_layer_sizes=(128, 128, 64, 32), 
-                activation='tanh',
-                max_iter=2000, 
-                early_stopping=True, 
+                hidden_layer_sizes=(400, 300, 200, 100, 50),
+                activation='relu',
+                max_iter=2000,
+                early_stopping=True,
                 validation_fraction=0.15,
-                # alpha=0.001, 
-                # learning_rate_init=0.0005,
-                # solver='adam',
-                # batch_size='auto',
-                random_state=42
+                random_state=42,
+                verbose=False
             )
         elif target_name == 'brake':
             model = MLPRegressor(
-                hidden_layer_sizes=(128, 64, 32),
-                activation='relu',
+                hidden_layer_sizes=(120, 100, 80, 60, 40, 20),
+                activation='tanh',
                 max_iter=2000,
-                early_stopping=True, 
+                early_stopping=True,
                 validation_fraction=0.15,
-                # alpha=0.0001, 
-                # learning_rate_init=0.0005,
-                # solver='adam',
-                # batch_size='auto',
-                random_state=42
+                random_state=42,
+                verbose=False
             )
-        model.fit(X_train_scaled, y_train) # type: ignore
-        y_pred = model.predict(X_test_scaled) # type: ignore
-        score = r2_score(y_test, y_pred)
-        metric = "R²"
-        
+        if model is not None:
+            model.fit(X_train_scaled, y_train)
+            y_pred = model.predict(X_test_scaled)
+            score = r2_score(y_test, y_pred)
+            metric = "R²"
+
+            if hasattr(model, 'loss_curve_'):
+                history['loss_curve'] = model.loss_curve_
+            else:
+                history['loss_curve'] = []
+            history['r2'] = score
+        else:
+            score = 0
+            metric = "R²"
+            history['loss_curve'] = []
+            history['r2'] = score
     else:
-        # Encode le marce per Random Forest
         encoder = LabelEncoder()
         y_train_encoded = encoder.fit_transform(y_train)
         y_test_encoded = encoder.transform(y_test)
@@ -200,17 +208,18 @@ def train_single_model(target_name, dataset):
         y_pred_encoded = model.predict(X_test)
         score = accuracy_score(y_test_encoded, y_pred_encoded)
         metric = "Accuracy"
+        history['accuracy'] = score
     
     print(f"   {target_name}: {metric} = {score:.4f}")
-    return target_name, model, scaler, encoder # type: ignore
+    return target_name, model, scaler, encoder, history
 
 def train_models(data_dir):
-    """Training parallelo di tutti i modelli"""
     dataset = load_data(data_dir)
     
     models = {}
     scalers = {}
     encoders = {}
+    histories = {}
     
     print("\n" + "="*50)
     print("TRAINING MODELLI PARALLELO")
@@ -224,15 +233,16 @@ def train_models(data_dir):
         }
         
         for future in as_completed(futures):
-            target_name, model, scaler, encoder = future.result()
+            target_name, model, scaler, encoder, history = future.result()
             models[target_name] = model
             if scaler:
                 scalers[target_name] = scaler
             if encoder:
                 encoders[target_name] = encoder
+            histories[target_name] = history
     
     print(f"\nTutti i modelli completati!")
-    return models, scalers, encoders
+    return models, scalers, encoders, histories
 
 def predict(sensor_data, models, scalers, encoders):
     """
@@ -280,7 +290,7 @@ def predict(sensor_data, models, scalers, encoders):
     predictions['brake'] = pred_brake
     
     # ===============================
-    # PREDIZIONE GEAR (CORRETTA)
+    # PREDIZIONE GEAR
     # ===============================
     features_gear = FEATURE_SETS['gear']
     X_input_gear = np.array([[sensor_data[f] for f in features_gear]])
@@ -325,11 +335,9 @@ if __name__ == "__main__":
     import time
     start = time.time()
 
-    # Training
     data_dir = './torcs_training_data'
-    models, scalers, encoders = train_models(data_dir)
+    models, scalers, encoders, histories = train_models(data_dir)
     
-    # Salva il modello in una cartella con timestamp
     now = datetime.now()
     timestamp = now.strftime("%d-%m-%Y_%H-%M-%S")
     model_dir = f'models/model_{timestamp}'
@@ -337,57 +345,45 @@ if __name__ == "__main__":
     
     model_path = os.path.join(model_dir, 'torcs_optimal_model.pkl')
     save_model(models, scalers, encoders, model_path)
+
     
-    # Test con dati di esempio
-    print("\n" + "="*50)
-    print("TEST DEL MODELLO")
-    print("="*50)
-    
-    # Carica dati per test
-    test_data = load_data(data_dir)
-    sample_idx = 1000
-    
-    # Prepara input di test
-    test_input = {}
-    all_features = set()
-    for features in FEATURE_SETS.values():
-        all_features.update(features)
-    
-    for feature in all_features:
-        test_input[feature] = test_data[feature].iloc[sample_idx]
-    
-    # Predizione
-    controls = predict(test_input, models, scalers, encoders)
-    
-    print("🔍 Confronto Predizione vs Realtà:")
-    print("-" * 40)
-    
-    # STEER
-    real_steer = test_data['steer'].iloc[sample_idx]
-    pred_steer = controls['steer']
-    diff_steer = abs(pred_steer - real_steer)
-    print(f"steer    | Pred: {pred_steer:6.3f} | Real: {real_steer:6.3f} | Diff: {diff_steer:6.3f}")
-    
-    # THROTTLE
-    real_throttle = test_data['throttle'].iloc[sample_idx]
-    pred_throttle = controls['throttle']
-    diff_throttle = abs(pred_throttle - real_throttle)
-    print(f"throttle | Pred: {pred_throttle:6.3f} | Real: {real_throttle:6.3f} | Diff: {diff_throttle:6.3f}")
-    
-    # BRAKE
-    real_brake = test_data['brake'].iloc[sample_idx]
-    pred_brake = controls['brake']
-    diff_brake = abs(pred_brake - real_brake)
-    print(f"brake    | Pred: {pred_brake:6.3f} | Real: {real_brake:6.3f} | Diff: {diff_brake:6.3f}")
-    
-    # GEAR
-    real_gear = test_data['gear'].iloc[sample_idx]
-    pred_gear = controls['gear']
-    diff_gear = abs(pred_gear - real_gear)
-    print(f"gear     | Pred: {pred_gear:6.3f} | Real: {real_gear:6.3f} | Diff: {diff_gear:6.3f}")
-    
-    print(f"\nModello ottimale pronto per l'uso!")
+    print(f"\nModello pronto per l'uso!")
     winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS)
+    
+    # ===============================
+    # GRAFICI METRICHE
+    # ===============================
+    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle('Metriche Training Modelli')
+    # STEER
+    steer_hist = histories.get('steer', {})
+    axs[0, 0].plot(steer_hist.get('loss_curve', []), label='Loss')
+    axs[0, 0].set_title(f"Steer - R²: {steer_hist.get('r2', 0):.3f}")
+    axs[0, 0].set_xlabel('Epoca')
+    axs[0, 0].set_ylabel('Loss')
+    axs[0, 0].legend()
+    # THROTTLE
+    throttle_hist = histories.get('throttle', {})
+    axs[0, 1].plot(throttle_hist.get('loss_curve', []), label='Loss')
+    axs[0, 1].set_title(f"Throttle - R²: {throttle_hist.get('r2', 0):.3f}")
+    axs[0, 1].set_xlabel('Epoca')
+    axs[0, 1].set_ylabel('Loss')
+    axs[0, 1].legend()
+    # BRAKE
+    brake_hist = histories.get('brake', {})
+    axs[1, 0].plot(brake_hist.get('loss_curve', []), label='Loss')
+    axs[1, 0].set_title(f"Brake - R²: {brake_hist.get('r2', 0):.3f}")
+    axs[1, 0].set_xlabel('Epoca')
+    axs[1, 0].set_ylabel('Loss')
+    axs[1, 0].legend()
+    # GEAR
+    gear_hist = histories.get('gear', {})
+    axs[1, 1].bar(['Accuracy'], [gear_hist.get('accuracy', 0)])
+    axs[1, 1].set_ylim(0, 1)
+    axs[1, 1].set_title(f"Gear - Accuracy: {gear_hist.get('accuracy', 0):.3f}")
+    axs[1, 1].set_ylabel('Accuracy')
+    plt.tight_layout(rect=(0, 0.03, 1, 0.95))
+    plt.show()
 
     end = time.time()
     print(f"\nTempo totale di esecuzione: {end - start:.2f} secondi")
